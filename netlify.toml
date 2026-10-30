@@ -1,0 +1,9 @@
+# Netlify build for the Next.js frontend. Netlify detects Next.js and adds its runtime automatically.
+# Set NEXT_PUBLIC_API_URL in Netlify -> Site configuration -> Environment variables to the Render backend,
+# e.g. https://email-dashboard-backend.onrender.com/api/v1
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "24"
