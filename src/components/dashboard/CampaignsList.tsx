@@ -38,6 +38,7 @@ import {
   friendlyError,
   humanizeTags,
   pct,
+  sendDuration,
 } from "@/lib/campaigns";
 
 const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -76,6 +77,9 @@ function totals(c: Campaign): VariantStats {
 }
 
 function whenLabel(c: Campaign): string {
+  const p = c.progress;
+  if (c.status === "sending") return p ? `Sending now · ${p.sent + p.failed} of ${p.total} done` : "Getting ready to send";
+  if (c.status === "paused" && p?.queued) return `Paused partway · ${p.sent + p.failed} of ${p.total} done`;
   if (c.schedule_type === "recurring") {
     // The repeat time is in the campaign's own time zone; say so if the viewer is somewhere else
     const base = describeCron(c.cron_expression) + (c.timezone && c.timezone !== LOCAL_TZ ? ` (${c.timezone.replace(/_/g, " ")} time)` : "");
@@ -86,6 +90,37 @@ function whenLabel(c: Campaign): string {
   if (c.status === "draft") return `Created ${formatDateTime(c.created_at)}`;
   if (c.schedule_type === "once") return `Planned for ${formatDateTime(c.scheduled_at)}`;
   return `Created ${formatDateTime(c.created_at)}`;
+}
+
+/** "in 12 seconds", "in 3 minutes", or "any moment" for a send time that has come */
+function untilLabel(iso: string): string {
+  const s = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+  if (s <= 5) return "any moment";
+  if (s < 90) return `in ${s} seconds`;
+  return `in ${Math.round(s / 60)} minutes`;
+}
+
+function SendProgressBar({ c }: { c: Campaign }) {
+  const p = c.progress;
+  if (!p || p.total === 0) return null;
+  const done = p.sent + p.failed;
+  return (
+    <div className="campaign-progress">
+      <div className="campaign-progress-top">
+        <span>
+          <strong>{done}</strong> of {p.total} sent{p.failed ? ` · ${p.failed} failed` : ""}
+        </span>
+        <span>
+          {c.status === "sending"
+            ? p.next_send_at ? `Next email ${untilLabel(p.next_send_at)}` : "Finishing up"
+            : `${p.queued} waiting until you resume`}
+        </span>
+      </div>
+      <div className="rtile-track" role="progressbar" aria-valuemin={0} aria-valuemax={p.total} aria-valuenow={done} aria-label="Sending progress">
+        <span style={{ transform: `scaleX(${done / p.total})` }} />
+      </div>
+    </div>
+  );
 }
 
 function ResultTile({ icon, label, count, total, tone, hint }: {
@@ -279,7 +314,7 @@ function CampaignCard({ c, onChanged, confirm }: { c: Campaign; onChanged: Notif
         {
           "send-now": `"${c.name}" is on its way.`,
           pause: `"${c.name}" is paused. Nothing more will be sent until you resume it.`,
-          resume: `"${c.name}" is scheduled again.`,
+          resume: data.status === "sending" ? `"${c.name}" is sending again. The rest of the list goes out at the same safe pace.` : `"${c.name}" is scheduled again.`,
           "follow-ups/stop": `Stopped ${data.cancelled} follow-up${data.cancelled === 1 ? "" : "s"} for "${c.name}".`,
           delete: `"${c.name}" was deleted.`,
         }[action]
@@ -296,7 +331,8 @@ function CampaignCard({ c, onChanged, confirm }: { c: Campaign; onChanged: Notif
       title: "Send this campaign now?",
       message: (
         <>
-          <strong>{c.name}</strong> will be sent to {c.recipient_count} {c.recipient_count === 1 ? "person" : "people"} right away.
+          <strong>{c.name}</strong> will start going out to {c.recipient_count} {c.recipient_count === 1 ? "person" : "people"} now
+          {c.send_speed && c.send_speed !== "fast" ? `, a few at a time (${sendDuration(c.recipient_count, c.send_speed)} in all).` : "."}
           {c.schedule_type === "recurring" && " Its regular schedule stays the same."}
         </>
       ),
@@ -317,7 +353,9 @@ function CampaignCard({ c, onChanged, confirm }: { c: Campaign; onChanged: Notif
       onConfirm: () => run("delete"),
     });
 
-  const canResume = c.schedule_type !== "now" && (c.status === "paused" || c.status === "draft");
+  // Paused partway through a send: Resume carries on with the rest; Send now would start over
+  const stoppedPartway = c.status === "paused" && !!c.progress?.queued;
+  const canResume = stoppedPartway || (c.schedule_type !== "now" && (c.status === "paused" || c.status === "draft"));
   const fu = c.follow_ups;
 
   const stopFollowUps = () =>
@@ -375,6 +413,15 @@ function CampaignCard({ c, onChanged, confirm }: { c: Campaign; onChanged: Notif
         </div>
       )}
 
+      {c.paused_reason && c.status === "paused" && (
+        <div className="alert alert-warning campaign-error" role="status">
+          <TriangleAlert size={16} aria-hidden="true" />
+          <div>{c.paused_reason}</div>
+        </div>
+      )}
+
+      {(c.status === "sending" || stoppedPartway) && <SendProgressBar c={c} />}
+
       {fu && fu.steps > 0 && (
         <div className="campaign-followups">
           <MailPlus size={15} aria-hidden="true" />
@@ -399,19 +446,19 @@ function CampaignCard({ c, onChanged, confirm }: { c: Campaign; onChanged: Notif
             {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />} {open ? "Hide results" : "View results"}
           </button>
         )}
-        {c.status !== "sending" && (
+        {c.status !== "sending" && !stoppedPartway && (
           <button className="act" onClick={sendNow} disabled={!!busy}>
             <Send size={14} /> Send now
           </button>
         )}
-        {c.status === "scheduled" && (
+        {(c.status === "scheduled" || c.status === "sending") && (
           <button className="act" onClick={() => run("pause")} disabled={!!busy}>
-            <Pause size={14} /> Pause
+            <Pause size={14} /> {c.status === "sending" ? "Pause sending" : "Pause"}
           </button>
         )}
         {canResume && (
           <button className="act" onClick={() => run("resume")} disabled={!!busy}>
-            <Play size={14} /> {c.status === "draft" ? "Schedule it" : "Resume"}
+            <Play size={14} /> {stoppedPartway ? "Resume sending" : c.status === "draft" ? "Schedule it" : "Resume"}
           </button>
         )}
         {reached > 0 && (

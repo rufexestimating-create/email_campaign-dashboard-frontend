@@ -1758,6 +1758,11 @@ select.input {
 .campaign-followups svg { flex: none; color: var(--primary); }
 .campaign-followups strong { color: var(--text); font-weight: 600; }
 
+/* Paced sending: how far the current run has got */
+.campaign-progress { margin: 0 1.4rem 1rem 1.6rem; }
+.campaign-progress-top { display: flex; justify-content: space-between; gap: 0.5rem 1rem; flex-wrap: wrap; font-size: 0.82rem; color: var(--text-2); }
+.campaign-progress-top strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* Pre-send pop-up (PreflightDialog) */
 .preflight-counts { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .preflight-list { max-height: 46vh; overflow-y: auto; margin-top: 0.4rem; }

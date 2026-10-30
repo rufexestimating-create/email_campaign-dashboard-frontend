@@ -12,14 +12,17 @@ import {
   Download,
   FileSpreadsheet,
   FlaskConical,
+  Gauge,
   Info,
   Repeat,
   Save,
   Send,
+  ShieldCheck,
   Sparkles,
   Upload,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import {
@@ -28,6 +31,8 @@ import {
   Frequency,
   Recipient,
   SAMPLE_CSV,
+  SEND_SPEEDS,
+  SendSpeed,
   Template,
   WEEKDAYS,
   buildCron,
@@ -38,6 +43,7 @@ import {
   parseCsv,
   parsePasted,
   renderPreview,
+  sendDuration,
 } from "@/lib/campaigns";
 import { SpamFix, SpamResult, SpamSpan, applyFix } from "@/lib/spam";
 import { PreflightAction, PreflightResult } from "@/lib/insights";
@@ -140,6 +146,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
   const cron = buildCron(frequency, repeatTime, weekday, monthDay);
   const [followUps, setFollowUps] = useState<FollowUpDraft[]>([]);
+  const [sendSpeed, setSendSpeed] = useState<SendSpeed>("safe");
 
   const [submitting, setSubmitting] = useState<"send" | "draft" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -373,6 +380,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
           save_as_draft: asDraft,
           follow_ups: scheduleType === "recurring" ? [] : followUps,
           override_reason: overrideReason,
+          send_speed: sendSpeed,
         }),
       });
       const data = await res.json();
@@ -380,11 +388,12 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
         setError(errorMessage(data, "We couldn't create the campaign. Please try again."));
         return null;
       }
+      const pace = sendSpeed === "fast" ? "" : ` It will take ${sendDuration(data.recipient_count, sendSpeed)}; you can close this page meanwhile.`;
       onCreated(
         asDraft
           ? `"${data.name}" saved as a draft.`
           : data.status === "sending"
-            ? `"${data.name}" is on its way to ${data.recipient_count} ${data.recipient_count === 1 ? "person" : "people"}.`
+            ? `"${data.name}" is on its way to ${data.recipient_count} ${data.recipient_count === 1 ? "person" : "people"}.${pace}`
             : `"${data.name}" is scheduled. First send: ${formatDateTime(data.next_run_at)}.`
       );
       return data as { id: string };
@@ -975,6 +984,30 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
               <span className="field-hint">Each time, it goes to everyone on your list. You can pause it whenever you like.</span>
             </div>
           )}
+
+          <div className="field" style={{ marginTop: "1.25rem" }}>
+            <span className="field-label">Sending speed</span>
+            <div className="choice-grid">
+              {SEND_SPEEDS.map((s) => (
+                <button key={s.id} type="button" className={`choice ${sendSpeed === s.id ? "active" : ""}`} onClick={() => setSendSpeed(s.id)}>
+                  <span className="choice-icon">{s.id === "safe" ? <ShieldCheck size={17} /> : s.id === "normal" ? <Gauge size={17} /> : <Zap size={17} />}</span>
+                  <strong>{s.title}{s.id === "safe" ? " (recommended)" : ""}</strong>
+                  <span>{s.text}</span>
+                </button>
+              ))}
+            </div>
+            <span className="field-hint">
+              {recipients.length > 0 && sendSpeed !== "fast"
+                ? `${recipients.length} ${recipients.length === 1 ? "email takes" : "emails take"} ${sendDuration(recipients.length, sendSpeed)} to send. It runs on our server, so you can close this page. `
+                : ""}
+              Sending stops by itself if emails start bouncing or anyone marks it as spam, so a bad list can&apos;t harm your domain.
+            </span>
+            {sendSpeed === "fast" && recipients.length > 50 && (
+              <span className="cell-error" style={{ marginTop: "0.4rem" }}>
+                Sending {recipients.length} emails at once looks like spam to Gmail and Outlook. Use Safe or Normal for lists over 50.
+              </span>
+            )}
+          </div>
 
           <FollowUpsEditor value={followUps} onChange={setFollowUps} recurring={scheduleType === "recurring"} />
         </section>

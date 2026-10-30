@@ -34,6 +34,39 @@ export interface Campaign {
   variant_stats: Partial<Record<Variant, VariantStats>>;
   /** Automated follow-ups: how many steps, and follow-up emails by status (null if they couldn't be loaded) */
   follow_ups?: FollowUpCounts | null;
+  send_speed?: SendSpeed;
+  /** Set when sending stopped by itself (bounces or spam complaints) */
+  paused_reason?: string | null;
+  /** The run in progress (sending or paused partway); null otherwise */
+  progress?: SendProgress | null;
+}
+
+export type SendSpeed = "safe" | "normal" | "fast";
+
+export interface SendProgress {
+  total: number;
+  sent: number;
+  failed: number;
+  queued: number;
+  next_send_at: string | null;
+}
+
+/** Seconds between two emails, matching the backend's pacing.SPEEDS */
+export const SEND_SPEEDS: { id: SendSpeed; title: string; text: string; gap: [number, number] }[] = [
+  { id: "safe", title: "Safe", text: "One email every 15–30 seconds. Best for your domain's reputation.", gap: [15, 30] },
+  { id: "normal", title: "Normal", text: "One email every 5–10 seconds.", gap: [5, 10] },
+  { id: "fast", title: "All at once", text: "Only for small lists. Big bursts can get you blocked.", gap: [0, 0] },
+];
+
+/** Rough time to send `count` emails at a speed, e.g. "about 35 minutes" */
+export function sendDuration(count: number, speed: SendSpeed): string {
+  const [lo, hi] = SEND_SPEEDS.find((s) => s.id === speed)?.gap ?? [0, 0];
+  const seconds = Math.max(count - 1, 0) * ((lo + hi) / 2);
+  if (seconds < 60) return "under a minute";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `about ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `about ${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
 export interface FollowUpCounts {
