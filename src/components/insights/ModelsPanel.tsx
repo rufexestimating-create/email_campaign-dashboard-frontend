@@ -29,7 +29,8 @@ function signalName(f: string) {
 const quality = (v: number | null | undefined) => (v === null || v === undefined ? "Not measured" : v >= 0.85 ? "Strong" : v >= 0.7 ? "Good" : v >= 0.55 ? "Fair" : "Weak");
 
 /** How the two prediction models (inbox placement and lead scoring) are doing, and what they learned from */
-export function ModelsPanel() {
+/** `spamEnabled` false: only the lead scoring model is shown (the spam model is moving to its own app) */
+export function ModelsPanel({ spamEnabled }: { spamEnabled: boolean }) {
   const [spam, setSpam] = useState<ModelInfo | null>(null);
   const [leads, setLeads] = useState<LeadScoresOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,10 @@ export function ModelsPanel() {
     let url: string | null = null;
     const timer = setTimeout(async () => {
       setError(null);
-      const [s, l] = await Promise.all([callApi<ModelInfo>("/insights/model"), callApi<LeadScoresOverview>("/leads/scores")]);
+      const [s, l] = await Promise.all([
+        spamEnabled ? callApi<ModelInfo>("/insights/model") : Promise.resolve({ data: null, error: null }),
+        callApi<LeadScoresOverview>("/leads/scores"),
+      ]);
       setError(s.error ?? l.error);
       setSpam(s.data);
       setLeads(l.data);
@@ -56,25 +60,33 @@ export function ModelsPanel() {
       clearTimeout(timer);
       if (url) URL.revokeObjectURL(url);
     };
-  }, [attempt]);
+  }, [attempt, spamEnabled]);
 
   if (error) return <LoadError message={error} onRetry={() => setAttempt((a) => a + 1)} />;
-  if (!spam || !leads) return <div className="card empty"><div className="loader" /></div>;
+  if ((spamEnabled && !spam) || !leads) return <div className="card empty"><div className="loader" /></div>;
   const leadModel = leads.model;
-  const starter = spam.data_source === "synthetic" || leadModel?.data_source === "synthetic";
+  const starter = (spamEnabled && spam?.data_source === "synthetic") || leadModel?.data_source === "synthetic";
 
   return (
     <div className="lab-stack">
       {starter && (
         <div className="alert alert-info" role="status">
           <Info size={18} />
-          <div>
-            <strong>Starter models in use.</strong> Both models currently learn from sample data, so treat their numbers as rough guides.
-            They switch to your own results automatically once you&apos;ve logged 200 inbox tests and set the stage on enough leads.
-          </div>
+          {spamEnabled ? (
+            <div>
+              <strong>Starter models in use.</strong> Both models currently learn from sample data, so treat their numbers as rough guides.
+              They switch to your own results automatically once you&apos;ve logged 200 inbox tests and set the stage on enough leads.
+            </div>
+          ) : (
+            <div>
+              <strong>Starter model in use.</strong> Lead scoring currently learns from sample data, so treat its numbers as rough guides.
+              It switches to your own results automatically once you&apos;ve set the stage on enough leads.
+            </div>
+          )}
         </div>
       )}
 
+      {spamEnabled && spam && (<>
       <div className="lab-split">
         <div className="card">
           <div className="card-head">
@@ -130,6 +142,7 @@ export function ModelsPanel() {
           ))}
         </div>
       )}
+      </>)}
 
       <div className="card card-flush">
         <div className="lab-pad card-head" style={{ marginBottom: 0 }}>

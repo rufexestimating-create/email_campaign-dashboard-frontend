@@ -52,7 +52,7 @@ export function InsightsOverview({ open, onNewCampaign }: { open: (s: InsightsSe
     },
     {
       id: "deliverability", icon: <ShieldCheck size={20} />, question: "Will my email reach the inbox?",
-      text: "Paste a list and a message to get an instant 8-point check, with one-click fixes.",
+      text: "Paste a list and a message to get an instant pre-send check, with one-click fixes.",
       hint: "Takes about 5 seconds",
       cta: "Check an email",
     },

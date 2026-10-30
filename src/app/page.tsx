@@ -40,6 +40,8 @@ interface StatsData {
   success_rate: number;
   is_live_ready: boolean;
   default_from: string;
+  /** Whether the spam detector's parts are shown (backend setting SPAM_DETECTOR_ENABLED) */
+  spam_detector_enabled?: boolean;
 }
 
 type Tab = "campaigns" | "new" | "leads" | "insights" | "templates" | "activity" | "knowledge";
@@ -347,6 +349,8 @@ export default function CampaignDashboardPage() {
     );
   }
 
+  // The spam detector is moving to its own app; the backend says whether its parts still show here
+  const spamOn = !!stats?.spam_detector_enabled;
   // "New campaign" is the call-to-action at the end of the nav pill
   const nav: { id: Tab; label: string; count?: number }[] = [
     { id: "campaigns", label: "Campaigns", count: campaigns.length },
@@ -354,13 +358,15 @@ export default function CampaignDashboardPage() {
     { id: "insights", label: "Insights" },
     { id: "templates", label: "Templates" },
     { id: "activity", label: "Sent emails" },
-    { id: "knowledge", label: "Spam guide" },
+    ...(spamOn ? [{ id: "knowledge" as Tab, label: "Spam guide" }] : []),
   ];
   const quickActions = [
     { title: "Send a new email", text: "Write it, pick who gets it, send or schedule.", icon: <Plus size={18} />, tone: "primary", onClick: () => startCampaign() },
     { title: "Start from a template", text: "Use a ready-made email and just edit it.", icon: <LayoutTemplate size={18} />, tone: "info", onClick: () => goTo("templates") },
     { title: "Check who received it", text: "See every email and whether it arrived.", icon: <Inbox size={18} />, tone: "success", onClick: () => goTo("activity") },
-    { title: "Avoid the spam folder", text: "Words to avoid and what to write instead.", icon: <ShieldCheck size={18} />, tone: "violet", onClick: () => goTo("knowledge") },
+    ...(spamOn
+      ? [{ title: "Avoid the spam folder", text: "Words to avoid and what to write instead.", icon: <ShieldCheck size={18} />, tone: "violet", onClick: () => goTo("knowledge") }]
+      : []),
   ];
   const emailsSent = stats ? stats.sent_count + stats.simulated_count : 0;
   const firstName = user.full_name?.split(" ")[0];
@@ -615,6 +621,7 @@ export default function CampaignDashboardPage() {
             templates={templates}
             defaultFrom={stats?.default_from ?? ""}
             mode={mode}
+            spamEnabled={spamOn}
             onOpenGuide={() => goTo("knowledge")}
             onTemplateSaved={(msg) => notify(msg)}
             onCreated={(msg) => {
@@ -631,10 +638,11 @@ export default function CampaignDashboardPage() {
             onUse={(t) => startCampaign(t)}
             onNew={() => startCampaign()}
             confirm={setConfirmRequest}
+            spamEnabled={spamOn}
           />
         )}
         {activeTab === "activity" && <ActivityLog logs={logs} campaignNames={campaignNames} />}
-        {activeTab === "knowledge" && <KnowledgeBase onChanged={notify} confirm={setConfirmRequest} />}
+        {activeTab === "knowledge" && spamOn && <KnowledgeBase onChanged={notify} confirm={setConfirmRequest} />}
         {activeTab === "leads" && (
           <LeadsPage
             notify={(msg, isError) => notify(msg, isError)}
@@ -652,6 +660,7 @@ export default function CampaignDashboardPage() {
             notify={(msg, isError) => notify(msg, isError)}
             onNewCampaign={() => startCampaign()}
             onUseDraft={(draft) => startCampaign(undefined, draft)}
+            spamEnabled={spamOn}
           />
         )}
       </main>

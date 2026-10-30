@@ -37,12 +37,15 @@ export function TemplatesPanel({
   onUse,
   onNew,
   confirm,
+  spamEnabled,
 }: {
   templates: Template[];
   onChanged: (msg?: string, isError?: boolean) => void;
   onUse: (t: Template) => void;
   onNew: () => void;
   confirm: (r: ConfirmRequest) => void;
+  /** false while the spam detector is moving to its own app: no spam-risk bar on the cards */
+  spamEnabled: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -67,7 +70,7 @@ export function TemplatesPanel({
   // Spam score for every template, so risky wording is visible before it's reused
   const [scores, setScores] = useState<Record<string, { score: number; level: SpamLevel; label: string }>>({});
   useEffect(() => {
-    if (!templates.length) return;
+    if (!templates.length || !spamEnabled) return;
     apiFetch("/spam/check-batch", {
       method: "POST",
       body: JSON.stringify({ items: templates.slice(0, 50).map((t) => ({ subject: t.subject, body: t.body, content_type: t.content_type })) }),
@@ -78,7 +81,7 @@ export function TemplatesPanel({
         setScores(Object.fromEntries(results.map((r, i) => [templates[i].id ?? templates[i].name, r])));
       })
       .catch(() => {});
-  }, [templates]);
+  }, [templates, spamEnabled]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();

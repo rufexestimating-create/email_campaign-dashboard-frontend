@@ -72,6 +72,8 @@ interface Props {
   onOpenGuide: () => void;
   /** Called when the composer gains or loses unsent work */
   onDirtyChange?: (dirty: boolean) => void;
+  /** false while the spam detector is moving to its own app: no live spam score, highlights or spam panel */
+  spamEnabled: boolean;
 }
 
 export interface CampaignDraft {
@@ -108,7 +110,7 @@ const todayIso = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate, initialDraft, onTemplateSaved, onCreated, onOpenGuide, onDirtyChange }: Props) {
+export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate, initialDraft, onTemplateSaved, onCreated, onOpenGuide, onDirtyChange, spamEnabled }: Props) {
   // Details
   const [name, setName] = useState("");
   const [senderName, setSenderName] = useState("");
@@ -188,6 +190,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const checkNow = useRef(false);
   const checkSeq = useRef(0);
   useEffect(() => {
+    if (!spamEnabled) return;
     const delay = checkNow.current ? 0 : 800;
     checkNow.current = false;
     const timer = setTimeout(async () => {
@@ -212,7 +215,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
       setSpamLoading(false);
     }, delay);
     return () => clearTimeout(timer);
-  }, [a, b, abEnabled, contentType]);
+  }, [a, b, abEnabled, contentType, spamEnabled]);
 
   const spamStale = (version: Version) => checked[version] !== checkKey(contentType, version === "A" ? a : b);
   const marksFor = (version: Version, field: FieldName) =>
@@ -1050,16 +1053,18 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
           })}
         </div>
 
-        <SpamCheck
-          title={abEnabled ? "Spam check · Version A" : "Spam check"}
-          result={spam.A}
-          loading={spamLoading}
-          stale={spamStale("A")}
-          onFix={(fix) => applySpamFix("A", fix)}
-          onShow={(span) => showSpan("A", span)}
-          onOpenGuide={onOpenGuide}
-        />
-        {abEnabled && (
+        {spamEnabled && (
+          <SpamCheck
+            title={abEnabled ? "Spam check · Version A" : "Spam check"}
+            result={spam.A}
+            loading={spamLoading}
+            stale={spamStale("A")}
+            onFix={(fix) => applySpamFix("A", fix)}
+            onShow={(span) => showSpan("A", span)}
+            onOpenGuide={onOpenGuide}
+          />
+        )}
+        {spamEnabled && abEnabled && (
           <SpamCheck
             title="Spam check · Version B"
             result={spam.B}
@@ -1084,7 +1089,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                   step: 2,
                 },
                 { ok: stepDone[3], label: "Subject and message", value: stepDone[3] ? "Written" : "Missing", step: 3 },
-                {
+                spamEnabled && {
                   ok: !spamWorst || spamWorst.level === "good",
                   warn: !!spamWorst && spamWorst.level !== "good",
                   label: "Spam risk",
@@ -1093,7 +1098,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                 },
                 { ok: !abEnabled || stepDone[4], label: "Two-version test", value: abEnabled ? `${split}% / ${100 - split}%` : "Off", step: 4 },
                 { ok: stepDone[5], label: "When", value: scheduleSummary, step: 5 },
-              ] as { ok: boolean; warn?: boolean; label: string; value: string; step: number }[]
+              ].filter(Boolean) as { ok: boolean; warn?: boolean; label: string; value: string; step: number }[]
             ).map((row) => (
               <li key={row.label} className={row.warn ? "warn" : row.ok ? "ok" : ""}>
                 <span className="checklist-icon" aria-hidden="true">

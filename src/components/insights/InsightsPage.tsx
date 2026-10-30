@@ -36,7 +36,10 @@ export function InsightsPage({
   notify,
   onNewCampaign,
   onUseDraft,
+  spamEnabled,
 }: {
+  /** false while the spam detector is moving to its own app: spam scores and the spam model are hidden */
+  spamEnabled: boolean;
   /** Opens a specific section, e.g. from the Leads page's "How scoring works" link; otherwise the Overview */
   initialSection?: InsightsSection;
   defaultFrom: string;
@@ -51,7 +54,9 @@ export function InsightsPage({
     setSection(id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const intro = SECTIONS.find((s) => s.id === section)!.intro;
+  const intro = section === "models" && !spamEnabled
+    ? "How reliable the lead predictions are, and what they've learned."
+    : SECTIONS.find((s) => s.id === section)!.intro;
 
   return (
     <div>
@@ -66,11 +71,11 @@ export function InsightsPage({
       {intro && <p className="ins-tab-intro">{intro}</p>}
       {section === "overview" && <InsightsOverview open={open} onNewCampaign={onNewCampaign} />}
       {section === "send-times" && <SendTimesPanel onNewCampaign={onNewCampaign} onUseDraft={onUseDraft} />}
-      {section === "deliverability" && <DeliverabilityPanel defaultFrom={defaultFrom} onUseDraft={onUseDraft} />}
+      {section === "deliverability" && <DeliverabilityPanel defaultFrom={defaultFrom} onUseDraft={onUseDraft} spamEnabled={spamEnabled} />}
       {section === "warmup" && <WarmupPanel notify={notify} />}
       {section === "reviews" && <ReviewHistoryPanel onNewCampaign={onNewCampaign} />}
       {section === "engagement" && <TrackingPanel notify={notify} />}
-      {section === "models" && <ModelsPanel />}
+      {section === "models" && <ModelsPanel spamEnabled={spamEnabled} />}
     </div>
   );
 }

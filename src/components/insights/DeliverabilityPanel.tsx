@@ -32,6 +32,8 @@ const CHECKS_PREVIEW: { id: string; icon: React.ReactNode; title: string; text: 
   { id: "content_fit", icon: <FileText size={17} />, title: "The words", text: "Spam risk, unsubscribe line and address" },
 ];
 const CHECK_ICON = Object.fromEntries(CHECKS_PREVIEW.map((c) => [c.id, c.icon]));
+/** The checks built on the spam score; they don't run while the spam detector is switched off */
+const SPAM_CHECKS = new Set(["predicted_placement", "content_fit"]);
 
 const EXAMPLE = {
   recipients: "delivered@resend.dev\ninfo@somefirm.com",
@@ -64,7 +66,8 @@ function ScoreRing({ passed, total, verdict }: { passed: number; total: number; 
 }
 
 /** Check an email before sending: the same 8 checks as the review before sending, on any list and message. Nothing is sent. */
-export function DeliverabilityPanel({ defaultFrom, onUseDraft }: { defaultFrom: string; onUseDraft: (draft: CampaignDraft) => void }) {
+export function DeliverabilityPanel({ defaultFrom, onUseDraft, spamEnabled }: { defaultFrom: string; onUseDraft: (draft: CampaignDraft) => void; spamEnabled: boolean }) {
+  const previewChecks = spamEnabled ? CHECKS_PREVIEW : CHECKS_PREVIEW.filter((c) => !SPAM_CHECKS.has(c.id));
   const [form, setForm] = useState({
     from_email: defaultFrom || "Arvistry <hello@arvistry.com>",
     subject: "",
@@ -192,10 +195,10 @@ export function DeliverabilityPanel({ defaultFrom, onUseDraft }: { defaultFrom: 
 
         {!result && !running && (
           <div className="card">
-            <h2 className="card-title">8 things we check</h2>
+            <h2 className="card-title">{previewChecks.length} things we check</h2>
             <p className="card-sub">The same checks run automatically every time you send a campaign.</p>
             <ul className="dl-preview">
-              {CHECKS_PREVIEW.map((c) => (
+              {previewChecks.map((c) => (
                 <li key={c.id}>
                   <span className="dl-preview-icon">{c.icon}</span>
                   <div><strong>{c.title}</strong><span>{c.text}</span></div>
@@ -208,7 +211,7 @@ export function DeliverabilityPanel({ defaultFrom, onUseDraft }: { defaultFrom: 
         {running && !result && (
           <div className="card empty">
             <div className="loader" />
-            <p>Checking 8 things…</p>
+            <p>Checking {previewChecks.length} things…</p>
           </div>
         )}
 

@@ -73,7 +73,7 @@ export function GettingStarted({
     },
     {
       id: "first-campaign", icon: <Send size={18} />, title: "Write and send your first email",
-      text: "Five short steps. The app checks your wording for spam and warns you before anything goes out.",
+      text: "Five short steps. The app checks your list and settings and warns you before anything goes out.",
       done: campaignsCount > 0, cta: "Start writing", onClick: onNewCampaign,
     },
     {
