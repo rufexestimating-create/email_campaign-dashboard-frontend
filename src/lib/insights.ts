@@ -211,6 +211,8 @@ export interface ScoredLead {
   emails_sent: number;
   last_sent_at: string | null;
   engagement: Engagement;
+  /** When their next automatic follow-up is due; null when none is waiting */
+  next_follow_up_at: string | null;
 }
 
 export type Engagement = "replied" | "clicked" | "opened" | "delivered" | "sent" | "bounced" | "complained" | "none";

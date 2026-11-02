@@ -39,6 +39,16 @@ const STAGES: { id: LifecycleStage; label: string; tone: string }[] = [
 const STAGE_TONE = Object.fromEntries(STAGES.map((s) => [s.id, s.tone])) as Record<LifecycleStage, string>;
 const STOPS_FOLLOW_UPS = new Set<LifecycleStage>(["sql", "customer", "lost"]);
 
+/** What the stage means for this lead's automatic follow-up right now */
+function FollowUpNote({ stage, next }: { stage: LifecycleStage; next: string | null }) {
+  const when = next ? formatDateTime(next) : null;
+  if (STOPS_FOLLOW_UPS.has(stage)) {
+    return <span className="stage-note"><CirclePause size={12} aria-hidden="true" /> {when ? `Follow-up of ${when} won't be sent` : "Automatic follow-ups off"}</span>;
+  }
+  if (when) return <span className="stage-note is-on"><Check size={12} aria-hidden="true" /> Next follow-up {when}</span>;
+  return <span className="stage-note">No automatic follow-up scheduled</span>;
+}
+
 /** Stage picker. The two groups say what the choice does: keep automatic follow-ups going, or stop them. */
 function StageSelect({ value, label, disabled, onChange }: { value: LifecycleStage; label: string; disabled?: boolean; onChange: (s: LifecycleStage) => void }) {
   return (
@@ -290,6 +300,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
         const sent = await callApi<{ queued: number }>(`/leads/${lead.id}/follow-ups/send-now`, {});
         if (sent.error) return notify(sent.error, true);
         notify(sent.data!.queued ? `Sending ${who}'s follow-up now. It shows in Sent emails within a minute.` : "That follow-up has already gone out.");
+        load();
       },
     });
   };
@@ -302,7 +313,8 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
       setData((d) => d && { ...d, leads: d.leads.map((l) => (l.id === lead.id ? { ...l, lifecycle_stage: next } : l)) });
       const stops = STOPS_FOLLOW_UPS.has(next);
       if (next === "mql") return void offerFollowUpNow(lead);
-      notify(`${lead.name || lead.email} is now ${STAGES.find((s) => s.id === next)!.label.toLowerCase()}.${stops ? " Their automatic follow-ups are stopped." : ""}`);
+      const stopped = stops && lead.next_follow_up_at ? ` Their follow-up of ${formatDateTime(lead.next_follow_up_at)} won't be sent.` : stops ? " No automatic follow-ups will go to them." : "";
+      notify(`${lead.name || lead.email} is now ${STAGES.find((s) => s.id === next)!.label.toLowerCase()}.${stopped}`);
     } catch {
       notify(NETWORK_ERROR, true);
     } finally {
@@ -523,11 +535,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
                       <td>
                         <div className="stage-cell">
                           <StageSelect value={l.lifecycle_stage} label={`Stage for ${l.name || l.email}`} disabled={saving === l.id} onChange={(next) => changeStage(l, next)} />
-                          {STOPS_FOLLOW_UPS.has(l.lifecycle_stage) ? (
-                            <span className="stage-note"><CirclePause size={12} aria-hidden="true" /> Automatic follow-ups off</span>
-                          ) : (
-                            <span className="stage-note is-on"><Check size={12} aria-hidden="true" /> Automatic follow-ups on</span>
-                          )}
+                          <FollowUpNote stage={l.lifecycle_stage} next={l.next_follow_up_at} />
                           <button className="link-btn stage-write" onClick={() => setWrite(followUp(l))}>
                             <Send size={12} aria-hidden="true" /> Write email
                           </button>
