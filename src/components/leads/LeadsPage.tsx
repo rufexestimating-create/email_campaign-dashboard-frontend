@@ -94,6 +94,101 @@ function Likelihood({ p }: { p: number | null }) {
   );
 }
 
+interface InboxReply {
+  id: string;
+  recipient: string;
+  lead_id: string | null;
+  lead_name: string | null;
+  subject: string | null;
+  snippet: string | null;
+  received_at: string;
+  campaign_name: string | null;
+}
+interface RepliesResponse {
+  tracking_on: boolean;
+  reply_to: string | null;
+  replies: InboxReply[];
+}
+const REPLIES_SHOWN = 5;
+
+/** What people wrote back, read from the reply mailbox; a reply is the moment to decide their stage */
+function RecentReplies({ stageOf, onStage }: { stageOf: (leadId: string) => LifecycleStage | undefined; onStage: (leadId: string, stage: LifecycleStage) => void }) {
+  const [data, setData] = useState<RepliesResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await callApi<RepliesResponse>("/replies");
+    setData(res.data);
+    setError(res.error);
+  }, []);
+  useEffect(() => {
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
+  }, [load]);
+
+  if (error) return <LoadError message={error} onRetry={load} />;
+  if (!data) return null;
+  const shown = all ? data.replies : data.replies.slice(0, REPLIES_SHOWN);
+
+  return (
+    <div className="card replies-card">
+      <div className="card-head">
+        <div>
+          <h2 className="card-title"><Reply size={17} aria-hidden="true" /> Recent replies</h2>
+          <p className="card-sub">
+            {data.tracking_on
+              ? `What people wrote back to ${data.reply_to ?? "your emails"}. New replies appear within a minute and stop that person's follow-ups.`
+              : "Reply tracking is off: set the reply mailbox on the server to see replies here."}
+          </p>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={load}><RefreshCw size={14} /> Refresh</button>
+      </div>
+      {data.replies.length === 0 ? (
+        <p className="field-hint">No replies yet. When someone answers one of your emails, it shows here.</p>
+      ) : (
+        <ul className="replies-list">
+          {shown.map((r) => {
+            const stage = r.lead_id ? stageOf(r.lead_id) : undefined;
+            const who = r.lead_name || r.recipient;
+            return (
+              <li key={r.id} className="reply-item">
+                <span className={`sent-avatar av-${avatarTone(r.recipient)}`} aria-hidden="true">{who[0].toUpperCase()}</span>
+                <div className="reply-main">
+                  <div className="reply-head">
+                    <strong>{who}</strong>
+                    <span className="text-2">{r.recipient}</span>
+                    <span className="reply-when" title={formatDateTime(r.received_at)}>{timeAgo(r.received_at) || formatDateTime(r.received_at)}</span>
+                  </div>
+                  <p className="reply-text">{r.snippet ? `“${r.snippet}”` : <em className="text-2">No text, maybe just an attachment.</em>}</p>
+                  <div className="reply-foot">
+                    {r.campaign_name && <span className="text-2">Reply to “{r.campaign_name}”</span>}
+                    {r.lead_id && stage && (
+                      <select
+                        className={`input stage-select stage--${STAGE_TONE[stage] ?? "neutral"}`}
+                        aria-label={`Stage for ${who}`}
+                        value={stage}
+                        onChange={(e) => onStage(r.lead_id!, e.target.value as LifecycleStage)}
+                      >
+                        {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {data.replies.length > REPLIES_SHOWN && (
+        <button className="link-btn" style={{ marginTop: "0.75rem" }} onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all ${data.replies.length} replies`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Everyone your campaigns have emailed: who they are, how they've engaged, and the stage you've set */
 /** `onOpenModels` is left out while the Insights tab is hidden, and the "How scoring works" link goes with it */
 export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isError?: boolean) => void; onOpenModels?: () => void }) {
@@ -245,6 +340,14 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
               </button>
             ))}
       </section>
+
+      <RecentReplies
+        stageOf={(id) => data.leads.find((l) => l.id === id)?.lifecycle_stage}
+        onStage={(id, next) => {
+          const lead = data.leads.find((l) => l.id === id);
+          if (lead) changeStage(lead, next);
+        }}
+      />
 
       <div className="card card-flush" id="leads-list">
         <div className="leads-toolbar">
