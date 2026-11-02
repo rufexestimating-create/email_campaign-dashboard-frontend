@@ -24,6 +24,7 @@ import { apiFetch, errorMessage, NETWORK_ERROR } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
 import { LoadError } from "@/components/insights/LoadError";
 import { Pagination, usePagination } from "@/components/dashboard/Pagination";
+import { ConfirmDialog, type ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
 
 /** Stage you set as the conversation moves on. Ready to talk business, Customer and Lost stop automatic follow-ups. */
 const STAGES: { id: LifecycleStage; label: string; tone: string }[] = [
@@ -104,6 +105,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
   const [stage, setStage] = useState<"all" | LifecycleStage>("all");
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
   const load = useCallback(async () => {
     const res = await callApi<LeadScoresOverview>("/leads/scores");
@@ -126,6 +128,24 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
     load();
   };
 
+  /** Interested: while the interest is fresh, offer to send their waiting follow-up now instead of days later */
+  const offerFollowUpNow = async (lead: ScoredLead) => {
+    const res = await callApi<{ pending: number; next_due_at: string | null }>(`/leads/${lead.id}/follow-ups`);
+    if (!res.data?.pending) return;
+    const who = lead.name || lead.email;
+    setConfirm({
+      title: "Send their follow-up now?",
+      message: `${who} has ${res.data.pending === 1 ? "a follow-up" : `${res.data.pending} follow-ups`} waiting, due ${formatDateTime(res.data.next_due_at!)}. Send it now while they're interested? It goes out within a minute.`,
+      confirmLabel: "Send now",
+      cancelLabel: "Keep the schedule",
+      onConfirm: async () => {
+        const sent = await callApi<{ queued: number }>(`/leads/${lead.id}/follow-ups/send-now`, {});
+        if (sent.error) return notify(sent.error, true);
+        notify(sent.data!.queued ? `Sending ${who}'s follow-up now. It shows in Sent emails within a minute.` : "That follow-up has already gone out.");
+      },
+    });
+  };
+
   const changeStage = async (lead: ScoredLead, next: LifecycleStage) => {
     setSaving(lead.id);
     try {
@@ -134,6 +154,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
       setData((d) => d && { ...d, leads: d.leads.map((l) => (l.id === lead.id ? { ...l, lifecycle_stage: next } : l)) });
       const stops = next === "sql" || next === "customer" || next === "lost";
       notify(`${lead.name || lead.email} is now ${STAGES.find((s) => s.id === next)!.label.toLowerCase()}.${stops ? " Their automatic follow-ups are stopped." : ""}`);
+      if (next === "mql") offerFollowUpNow(lead);
     } catch {
       notify(NETWORK_ERROR, true);
     } finally {
@@ -177,6 +198,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
 
   return (
     <div className="lab-stack">
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
       {SHOW_LEAD_SCORES && data.alerts.length > 0 && (
         <div className="alert alert-success" role="status">
           <Flame size={18} />
