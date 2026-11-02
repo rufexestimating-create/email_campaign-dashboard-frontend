@@ -130,12 +130,16 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
 
   /** Interested: while the interest is fresh, offer to send their waiting follow-up now instead of days later */
   const offerFollowUpNow = async (lead: ScoredLead) => {
-    const res = await callApi<{ pending: number; next_due_at: string | null }>(`/leads/${lead.id}/follow-ups`);
-    if (!res.data?.pending) return;
     const who = lead.name || lead.email;
+    const res = await callApi<{ pending: number; next_due_at: string | null }>(`/leads/${lead.id}/follow-ups`);
+    const waiting = res.data;
+    if (!waiting) return notify(`${who} is now interested.`);
+    if (!waiting.pending) {
+      return notify(`${who} is now interested. No follow-up is waiting for them: add follow-ups when you next email them, or reply personally.`);
+    }
     setConfirm({
       title: "Send their follow-up now?",
-      message: `${who} has ${res.data.pending === 1 ? "a follow-up" : `${res.data.pending} follow-ups`} waiting, due ${formatDateTime(res.data.next_due_at!)}. Send it now while they're interested? It goes out within a minute.`,
+      message: `${who} has ${waiting.pending === 1 ? "a follow-up" : `${waiting.pending} follow-ups`} waiting, due ${formatDateTime(waiting.next_due_at!)}. Send it now while they're interested? It goes out within a minute.`,
       confirmLabel: "Send now",
       cancelLabel: "Keep the schedule",
       onConfirm: async () => {
@@ -153,8 +157,8 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
       if (!res.ok) return notify(errorMessage(await res.json(), "We couldn't update that lead."), true);
       setData((d) => d && { ...d, leads: d.leads.map((l) => (l.id === lead.id ? { ...l, lifecycle_stage: next } : l)) });
       const stops = next === "sql" || next === "customer" || next === "lost";
+      if (next === "mql") return void offerFollowUpNow(lead);
       notify(`${lead.name || lead.email} is now ${STAGES.find((s) => s.id === next)!.label.toLowerCase()}.${stops ? " Their automatic follow-ups are stopped." : ""}`);
-      if (next === "mql") offerFollowUpNow(lead);
     } catch {
       notify(NETWORK_ERROR, true);
     } finally {
