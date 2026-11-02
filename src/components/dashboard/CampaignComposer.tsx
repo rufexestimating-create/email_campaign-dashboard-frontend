@@ -1098,6 +1098,14 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                 },
                 { ok: !abEnabled || stepDone[4], label: "Two-version test", value: abEnabled ? `${split}% / ${100 - split}%` : "Off", step: 4 },
                 { ok: stepDone[5], label: "When", value: scheduleSummary, step: 5 },
+                scheduleType !== "recurring" && {
+                  ok: true,
+                  label: "Follow-ups",
+                  value: followUps.length
+                    ? `${followUps.length} · ${followUps.length > 1 ? "first " : ""}after ${followUps[0].wait_days} days`
+                    : "None",
+                  step: 5,
+                },
               ].filter(Boolean) as { ok: boolean; warn?: boolean; label: string; value: string; step: number }[]
             ).map((row) => (
               <li key={row.label} className={row.warn ? "warn" : row.ok ? "ok" : ""}>
