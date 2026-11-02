@@ -1763,6 +1763,13 @@ select.input {
 .stage-legend-title svg { color: var(--primary); }
 .stage-legend-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .stage-legend .pill { font-size: 0.75rem; }
+.stage-count { cursor: pointer; border: 1px solid transparent; gap: 0.35rem; font: inherit; font-size: 0.75rem; transition: border-color 0.15s, box-shadow 0.15s; }
+.stage-count strong { font-variant-numeric: tabular-nums; }
+.stage-count:hover { border-color: currentColor; }
+.stage-count.is-active { border-color: currentColor; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px currentColor; }
+.stage-count:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.stage-note.is-on { color: var(--success); }
+.stage-select optgroup { font-style: normal; font-weight: 700; color: var(--text-3); background: var(--surface-2); }
 .stage-note { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--text-3); padding-left: 0.4rem; }
 @media (max-width: 767px) {
   .leads-count { margin-left: 0; width: 100%; }

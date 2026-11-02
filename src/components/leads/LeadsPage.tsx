@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Check,
+  CirclePause,
   Flame,
   Info,
   Mail,
@@ -36,6 +37,27 @@ const STAGES: { id: LifecycleStage; label: string; tone: string }[] = [
   { id: "lost", label: "Lost", tone: "danger" },
 ];
 const STAGE_TONE = Object.fromEntries(STAGES.map((s) => [s.id, s.tone])) as Record<LifecycleStage, string>;
+const STOPS_FOLLOW_UPS = new Set<LifecycleStage>(["sql", "customer", "lost"]);
+
+/** Stage picker. The two groups say what the choice does: keep automatic follow-ups going, or stop them. */
+function StageSelect({ value, label, disabled, onChange }: { value: LifecycleStage; label: string; disabled?: boolean; onChange: (s: LifecycleStage) => void }) {
+  return (
+    <select
+      className={`input stage-select stage--${STAGE_TONE[value] ?? "neutral"}`}
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as LifecycleStage)}
+    >
+      <optgroup label="Automatic follow-ups keep going">
+        {STAGES.filter((s) => !STOPS_FOLLOW_UPS.has(s.id)).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+      </optgroup>
+      <optgroup label="Automatic follow-ups stop">
+        {STAGES.filter((s) => STOPS_FOLLOW_UPS.has(s.id)).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+      </optgroup>
+    </select>
+  );
+}
 
 /** Best thing that happened across all the emails a contact received; always shown as text plus an icon, never colour alone */
 const ENGAGEMENT: Record<Engagement, { label: string; tone: string; icon: React.ReactNode }> = {
@@ -194,16 +216,7 @@ function RecentReplies({
                         <button className="btn btn-secondary btn-sm" onClick={() => onReply(r)}>
                           <Reply size={14} aria-hidden="true" /> Reply
                         </button>
-                        {stage && (
-                      <select
-                        className={`input stage-select stage--${STAGE_TONE[stage] ?? "neutral"}`}
-                        aria-label={`Stage for ${who}`}
-                        value={stage}
-                        onChange={(e) => onStage(r.lead_id!, e.target.value as LifecycleStage)}
-                      >
-                        {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                      </select>
-                        )}
+                        {stage && <StageSelect value={stage} label={`Stage for ${who}`} onChange={(next) => onStage(r.lead_id!, next)} />}
                       </span>
                     )}
                   </div>
@@ -287,7 +300,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
       const res = await apiFetch(`/leads/${lead.id}`, { method: "PATCH", body: JSON.stringify({ lifecycle_stage: next }) });
       if (!res.ok) return notify(errorMessage(await res.json(), "We couldn't update that lead."), true);
       setData((d) => d && { ...d, leads: d.leads.map((l) => (l.id === lead.id ? { ...l, lifecycle_stage: next } : l)) });
-      const stops = next === "sql" || next === "customer" || next === "lost";
+      const stops = STOPS_FOLLOW_UPS.has(next);
       if (next === "mql") return void offerFollowUpNow(lead);
       notify(`${lead.name || lead.email} is now ${STAGES.find((s) => s.id === next)!.label.toLowerCase()}.${stops ? " Their automatic follow-ups are stopped." : ""}`);
     } catch {
@@ -305,6 +318,12 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
       replied: leads.filter((l) => ACTIVITY.replied(l.engagement)).length,
       problem: leads.filter((l) => ACTIVITY.problem(l.engagement)).length,
     };
+  }, [data]);
+
+  const stageCounts = useMemo(() => {
+    const out: Partial<Record<LifecycleStage, number>> = {};
+    for (const l of data?.leads ?? []) out[l.lifecycle_stage] = (out[l.lifecycle_stage] ?? 0) + 1;
+    return out;
   }, [data]);
 
   const shown = useMemo(() => {
@@ -411,19 +430,23 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
           </span>
         </div>
 
-        <div className="stage-legend" aria-label="What each stage does">
-          <span className="stage-legend-title"><Info size={14} aria-hidden="true" /> Stage controls follow-ups:</span>
-          <span className="stage-legend-group">
-            <span className="pill no-dot tone-neutral">New</span>
-            <span className="pill no-dot tone-info">Interested</span>
-            <span>follow-ups keep going</span>
-          </span>
-          <span className="stage-legend-group">
-            <span className="pill no-dot tone-violet">Ready to talk business</span>
-            <span className="pill no-dot tone-success">Customer</span>
-            <span className="pill no-dot tone-danger">Lost</span>
-            <span>follow-ups stop; you take it from here</span>
-          </span>
+        <div className="stage-legend" aria-label="Leads by stage">
+          <span className="stage-legend-title"><Info size={14} aria-hidden="true" /> Where each lead is:</span>
+          {[false, true].map((stops) => (
+            <span key={String(stops)} className="stage-legend-group">
+              {STAGES.filter((s) => STOPS_FOLLOW_UPS.has(s.id) === stops).map((s) => (
+                <button
+                  key={s.id}
+                  className={`pill no-dot tone-${s.tone} stage-count ${stage === s.id ? "is-active" : ""}`}
+                  aria-pressed={stage === s.id}
+                  onClick={() => setStage(stage === s.id ? "all" : s.id)}
+                >
+                  {s.label} <strong>{stageCounts[s.id] ?? 0}</strong>
+                </button>
+              ))}
+              <span>{stops ? "follow-ups stop: you take it from here" : "follow-ups keep going"}</span>
+            </span>
+          ))}
         </div>
 
         {shown.length === 0 ? (
@@ -499,18 +522,11 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
                       </>)}
                       <td>
                         <div className="stage-cell">
-                          <select
-                            className={`input stage-select stage--${STAGE_TONE[l.lifecycle_stage] ?? "neutral"}`}
-                            aria-label={`Stage for ${l.name || l.email}`}
-                            title="Ready to talk business, Customer or Lost stops their automatic follow-up emails."
-                            value={l.lifecycle_stage}
-                            disabled={saving === l.id}
-                            onChange={(ev) => changeStage(l, ev.target.value as LifecycleStage)}
-                          >
-                            {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                          </select>
-                          {(l.lifecycle_stage === "sql" || l.lifecycle_stage === "customer" || l.lifecycle_stage === "lost") && (
-                            <span className="stage-note"><Check size={12} aria-hidden="true" /> Follow-ups off</span>
+                          <StageSelect value={l.lifecycle_stage} label={`Stage for ${l.name || l.email}`} disabled={saving === l.id} onChange={(next) => changeStage(l, next)} />
+                          {STOPS_FOLLOW_UPS.has(l.lifecycle_stage) ? (
+                            <span className="stage-note"><CirclePause size={12} aria-hidden="true" /> Automatic follow-ups off</span>
+                          ) : (
+                            <span className="stage-note is-on"><Check size={12} aria-hidden="true" /> Automatic follow-ups on</span>
                           )}
                           <button className="link-btn stage-write" onClick={() => setWrite(followUp(l))}>
                             <Send size={12} aria-hidden="true" /> Write email
