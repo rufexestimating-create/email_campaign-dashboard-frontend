@@ -29,6 +29,7 @@ import { ActivityLog, type EmailLog } from "@/components/dashboard/ActivityLog";
 import { ConfirmDialog, type ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
 import { KnowledgeBase } from "@/components/dashboard/KnowledgeBase";
 import { LeadsPage } from "@/components/leads/LeadsPage";
+import { MailboxesPage } from "@/components/mailboxes/MailboxesPage";
 import { GettingStarted } from "@/components/dashboard/GettingStarted";
 import { InsightsPage, type InsightsSection } from "@/components/insights/InsightsPage";
 
@@ -44,7 +45,7 @@ interface StatsData {
   spam_detector_enabled?: boolean;
 }
 
-type Tab = "campaigns" | "new" | "leads" | "insights" | "templates" | "activity" | "knowledge";
+type Tab = "campaigns" | "new" | "leads" | "warmup" | "insights" | "templates" | "activity" | "knowledge";
 
 // Insights (send times, inbox check, warm-up, review history, tracking, prediction quality) is hidden for now: it moves
 // to the new spam detector app. Its code stays here, and warm-up limits, the pre-send review and tracking keep running
@@ -58,6 +59,7 @@ const PAGES: Record<Tab, { title: string; sub: string }> = {
   activity: { title: "Sent emails", sub: "Every email your campaigns have sent, and whether it arrived." },
   knowledge: { title: "Spam guide", sub: "Check any email, and learn the words and habits that send emails to spam." },
   leads: { title: "Leads", sub: "Everyone your campaigns have emailed. Set a stage as the conversation moves on: Ready to talk business, Customer or Lost stops their follow-up emails." },
+  warmup: { title: "Mailbox warm-up", sub: "Your company mailboxes email each other and answer, so they reach the inbox before they email clients." },
   insights: { title: "Insights", sub: "When to send, how your emails are landing, and how your team uses the pre-send review." },
 };
 
@@ -360,6 +362,7 @@ export default function CampaignDashboardPage() {
   const nav: { id: Tab; label: string; count?: number }[] = [
     { id: "campaigns", label: "Campaigns", count: campaigns.length },
     { id: "leads", label: "Leads" },
+    { id: "warmup", label: "Warm-up" },
     ...(SHOW_INSIGHTS ? [{ id: "insights" as Tab, label: "Insights" }] : []),
     { id: "templates", label: "Templates" },
     { id: "activity", label: "Sent emails" },
@@ -657,6 +660,7 @@ export default function CampaignDashboardPage() {
             } : undefined}
           />
         )}
+        {activeTab === "warmup" && <MailboxesPage notify={(msg, isError) => notify(msg, isError)} confirm={setConfirmRequest} />}
         {activeTab === "insights" && SHOW_INSIGHTS && (
           <InsightsPage
             key={insightsSection ?? "default"}
