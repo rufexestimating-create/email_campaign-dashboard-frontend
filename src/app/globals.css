@@ -1779,6 +1779,10 @@ select.input {
 .reply-text { margin: 0.35rem 0 0.5rem; color: var(--text); line-height: 1.5; overflow-wrap: anywhere; }
 .reply-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.8rem; }
 .reply-foot .stage-select { width: auto; min-width: 11rem; }
+.reply-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.stage-write { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; padding-left: 0.4rem; }
+.dialog.write-email { max-width: 560px; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.write-email-form { display: grid; gap: 0.85rem; margin-top: 1rem; }
 .leads-note { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.9rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: 0.82rem; color: var(--text-2); }
 .leads-note p { margin: 0; flex: 1; }
 .leads-note svg { flex: none; margin-top: 2px; color: var(--text-3); }

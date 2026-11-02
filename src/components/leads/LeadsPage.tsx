@@ -25,6 +25,7 @@ import { formatDateTime } from "@/lib/campaigns";
 import { LoadError } from "@/components/insights/LoadError";
 import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { ConfirmDialog, type ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
+import { WriteEmailDialog, type WriteEmailRequest } from "./WriteEmailDialog";
 
 /** Stage you set as the conversation moves on. Ready to talk business, Customer and Lost stop automatic follow-ups. */
 const STAGES: { id: LifecycleStage; label: string; tone: string }[] = [
@@ -111,8 +112,33 @@ interface RepliesResponse {
 }
 const REPLIES_SHOWN = 5;
 
+const SIGN_OFF = "\n\nBest regards,";
+/** A follow-up you write yourself, whenever you choose */
+function followUp(lead: { id: string; email: string; name: string | null }): WriteEmailRequest {
+  return {
+    leadId: lead.id, to: lead.email, name: lead.name, title: `Follow up with ${lead.name || lead.email}`, subject: "Following up",
+    body: "Hi {{first_name}},\n\nJust following up on my last email. Would a quick call this week work to talk it through?" + SIGN_OFF,
+  };
+}
+/** An answer to what they wrote, in the same conversation */
+function answer(r: InboxReply): WriteEmailRequest {
+  const subject = r.subject?.trim() || "your message";
+  return {
+    leadId: r.lead_id!, to: r.recipient, name: r.lead_name, title: `Reply to ${r.lead_name || r.recipient}`, replyId: r.id,
+    subject: /^re:/i.test(subject) ? subject : `Re: ${subject}`, body: "Hi {{first_name}},\n\nThanks for getting back to me. " + SIGN_OFF,
+  };
+}
+
 /** What people wrote back, read from the reply mailbox; a reply is the moment to decide their stage */
-function RecentReplies({ stageOf, onStage }: { stageOf: (leadId: string) => LifecycleStage | undefined; onStage: (leadId: string, stage: LifecycleStage) => void }) {
+function RecentReplies({
+  stageOf,
+  onStage,
+  onReply,
+}: {
+  stageOf: (leadId: string) => LifecycleStage | undefined;
+  onStage: (leadId: string, stage: LifecycleStage) => void;
+  onReply: (r: InboxReply) => void;
+}) {
   const [data, setData] = useState<RepliesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -163,7 +189,12 @@ function RecentReplies({ stageOf, onStage }: { stageOf: (leadId: string) => Life
                   <p className="reply-text">{r.snippet ? `“${r.snippet}”` : <em className="text-2">No text, maybe just an attachment.</em>}</p>
                   <div className="reply-foot">
                     {r.campaign_name && <span className="text-2">Reply to “{r.campaign_name}”</span>}
-                    {r.lead_id && stage && (
+                    {r.lead_id && (
+                      <span className="reply-actions">
+                        <button className="btn btn-secondary btn-sm" onClick={() => onReply(r)}>
+                          <Reply size={14} aria-hidden="true" /> Reply
+                        </button>
+                        {stage && (
                       <select
                         className={`input stage-select stage--${STAGE_TONE[stage] ?? "neutral"}`}
                         aria-label={`Stage for ${who}`}
@@ -172,6 +203,8 @@ function RecentReplies({ stageOf, onStage }: { stageOf: (leadId: string) => Life
                       >
                         {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
+                        )}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -201,6 +234,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const [write, setWrite] = useState<WriteEmailRequest | null>(null);
 
   const load = useCallback(async () => {
     const res = await callApi<LeadScoresOverview>("/leads/scores");
@@ -230,7 +264,9 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
     const waiting = res.data;
     if (!waiting) return notify(`${who} is now interested.`);
     if (!waiting.pending) {
-      return notify(`${who} is now interested. No follow-up is waiting for them: add follow-ups when you next email them, or reply personally.`);
+      // Nothing automatic is waiting, so offer to write one now
+      notify(`${who} is now interested.`);
+      return setWrite({ ...followUp(lead), title: `${who} is interested: follow up now?` });
     }
     setConfirm({
       title: "Send their follow-up now?",
@@ -298,6 +334,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
   return (
     <div className="lab-stack">
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+      <WriteEmailDialog request={write} onClose={() => setWrite(null)} notify={notify} />
       {SHOW_LEAD_SCORES && data.alerts.length > 0 && (
         <div className="alert alert-success" role="status">
           <Flame size={18} />
@@ -347,6 +384,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
           const lead = data.leads.find((l) => l.id === id);
           if (lead) changeStage(lead, next);
         }}
+        onReply={(r) => setWrite(answer(r))}
       />
 
       <div className="card card-flush" id="leads-list">
@@ -474,6 +512,9 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
                           {(l.lifecycle_stage === "sql" || l.lifecycle_stage === "customer" || l.lifecycle_stage === "lost") && (
                             <span className="stage-note"><Check size={12} aria-hidden="true" /> Follow-ups off</span>
                           )}
+                          <button className="link-btn stage-write" onClick={() => setWrite(followUp(l))}>
+                            <Send size={12} aria-hidden="true" /> Write email
+                          </button>
                         </div>
                       </td>
                     </tr>
