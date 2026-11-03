@@ -6,6 +6,7 @@ import { BAND_INFO, LeadScoresOverview, LifecycleStage, ScoreBand, ScoredLead, c
 import { apiFetch, errorMessage, NETWORK_ERROR } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
 import { LoadError } from "@/components/insights/LoadError";
+import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 
 const STAGES: { id: LifecycleStage; label: string }[] = [
   { id: "new", label: "New" },
@@ -84,6 +85,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
         (!q || [l.email, l.name, l.company].some((v) => v?.toLowerCase().includes(q)))
     );
   }, [data, band, stage, query]);
+  const pager = usePagination(shown, `${band}|${stage}|${query}`, 25);
 
   if (error) return <LoadError message={error} onRetry={load} />;
   if (!data) return <div className="card empty"><div className="loader" /></div>;
@@ -122,7 +124,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
         ))}
       </section>
 
-      <div className="card card-flush">
+      <div className="card card-flush" id="leads-list">
         <div className="leads-toolbar">
           <label className="leads-search">
             <Search size={16} aria-hidden="true" />
@@ -171,11 +173,11 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
                   <th>Priority</th>
                   <th>Engagement</th>
                   </>)}
-                  <th title="Set this yourself as the conversation moves on.">Stage (you set)</th>
+                  <th title="Ready to talk business, Customer or Lost stops their automatic follow-up emails.">Stage (you set)</th>
                 </tr>
               </thead>
               <tbody>
-                {shown.map((l) => (
+                {pager.pageItems.map((l) => (
                   <tr key={l.id}>
                     <td className="truncate">
                       <strong className="leads-name">{l.name || l.email}</strong>
@@ -199,6 +201,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
             </table>
           </div>
         )}
+        <Pagination {...pager} noun="leads" scrollTo="leads-list" />
       </div>
 
       {SHOW_LEAD_SCORES && <div className="leads-note">
