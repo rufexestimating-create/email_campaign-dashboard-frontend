@@ -244,6 +244,21 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
           </span>
         </div>
 
+        <div className="stage-legend" aria-label="What each stage does">
+          <span className="stage-legend-title"><Info size={14} aria-hidden="true" /> Stage controls follow-ups:</span>
+          <span className="stage-legend-group">
+            <span className="pill no-dot tone-neutral">New</span>
+            <span className="pill no-dot tone-info">Interested</span>
+            <span>follow-ups keep going</span>
+          </span>
+          <span className="stage-legend-group">
+            <span className="pill no-dot tone-violet">Ready to talk business</span>
+            <span className="pill no-dot tone-success">Customer</span>
+            <span className="pill no-dot tone-danger">Lost</span>
+            <span>follow-ups stop; you take it from here</span>
+          </span>
+        </div>
+
         {shown.length === 0 ? (
           <div className="empty">
             <div className="empty-icon"><Users size={24} /></div>

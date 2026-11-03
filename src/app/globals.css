@@ -1758,6 +1758,11 @@ select.input {
 .stage--violet { --tone: var(--violet); --tone-soft: var(--violet-soft); }
 .stage--success { --tone: var(--success); --tone-soft: var(--success-soft); }
 .stage--danger { --tone: var(--danger); --tone-soft: var(--danger-soft); }
+.stage-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; padding: 0.65rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--surface-2); font-size: 0.8rem; color: var(--text-2); }
+.stage-legend-title { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; color: var(--text); }
+.stage-legend-title svg { color: var(--primary); }
+.stage-legend-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.stage-legend .pill { font-size: 0.75rem; }
 .stage-note { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--text-3); padding-left: 0.4rem; }
 @media (max-width: 767px) {
   .leads-count { margin-left: 0; width: 100%; }
