@@ -206,7 +206,14 @@ export interface ScoredLead {
   segment: string | null;
   scored_at: string | null;
   score_version: string | null;
+  created_at?: string;
+  /** Campaign emails this contact received, the last one, and the best thing that happened across them */
+  emails_sent: number;
+  last_sent_at: string | null;
+  engagement: Engagement;
 }
+
+export type Engagement = "replied" | "clicked" | "opened" | "delivered" | "sent" | "bounced" | "complained" | "none";
 
 type ModelScores = { pr_auc: number | null; roc_auc: number | null };
 export interface LeadComparison {
