@@ -46,6 +46,11 @@ interface StatsData {
 
 type Tab = "campaigns" | "new" | "leads" | "insights" | "templates" | "activity" | "knowledge";
 
+// Insights (send times, inbox check, warm-up, review history, tracking, prediction quality) is hidden for now: it moves
+// to the new spam detector app. Its code stays here, and warm-up limits, the pre-send review and tracking keep running
+// on the server. Set to true to bring the tab back.
+const SHOW_INSIGHTS = false;
+
 const PAGES: Record<Tab, { title: string; sub: string }> = {
   campaigns: { title: "Campaigns", sub: "See how your emails are doing and what's coming up next." },
   new: { title: "New campaign", sub: "Five quick steps: name it, add people, write it, test it, send it." },
@@ -355,7 +360,7 @@ export default function CampaignDashboardPage() {
   const nav: { id: Tab; label: string; count?: number }[] = [
     { id: "campaigns", label: "Campaigns", count: campaigns.length },
     { id: "leads", label: "Leads" },
-    { id: "insights", label: "Insights" },
+    ...(SHOW_INSIGHTS ? [{ id: "insights" as Tab, label: "Insights" }] : []),
     { id: "templates", label: "Templates" },
     { id: "activity", label: "Sent emails" },
     ...(spamOn ? [{ id: "knowledge" as Tab, label: "Spam guide" }] : []),
@@ -448,10 +453,10 @@ export default function CampaignDashboardPage() {
                 campaignsCount={campaigns.length}
                 refreshKey={campaigns.length * 100000 + logs.length}
                 onNewCampaign={() => startCampaign()}
-                onOpenWarmup={() => {
+                onOpenWarmup={SHOW_INSIGHTS ? () => {
                   setInsightsSection("warmup");
                   goTo("insights");
-                }}
+                } : undefined}
                 onOpenLeads={() => goTo("leads")}
               />
             )}
@@ -646,13 +651,13 @@ export default function CampaignDashboardPage() {
         {activeTab === "leads" && (
           <LeadsPage
             notify={(msg, isError) => notify(msg, isError)}
-            onOpenModels={() => {
+            onOpenModels={SHOW_INSIGHTS ? () => {
               setInsightsSection("models");
               goTo("insights");
-            }}
+            } : undefined}
           />
         )}
-        {activeTab === "insights" && (
+        {activeTab === "insights" && SHOW_INSIGHTS && (
           <InsightsPage
             key={insightsSection ?? "default"}
             initialSection={insightsSection}

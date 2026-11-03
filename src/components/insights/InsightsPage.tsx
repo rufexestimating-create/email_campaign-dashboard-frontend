@@ -69,7 +69,7 @@ export function InsightsPage({
         ))}
       </nav>
       {intro && <p className="ins-tab-intro">{intro}</p>}
-      {section === "overview" && <InsightsOverview open={open} onNewCampaign={onNewCampaign} />}
+      {section === "overview" && <InsightsOverview open={open} onNewCampaign={onNewCampaign} spamEnabled={spamEnabled} />}
       {section === "send-times" && <SendTimesPanel onNewCampaign={onNewCampaign} onUseDraft={onUseDraft} />}
       {section === "deliverability" && <DeliverabilityPanel defaultFrom={defaultFrom} onUseDraft={onUseDraft} spamEnabled={spamEnabled} />}
       {section === "warmup" && <WarmupPanel notify={notify} />}

@@ -29,7 +29,8 @@ function Likelihood({ p }: { p: number | null }) {
 }
 
 /** Every contact you've emailed, ranked by how likely they are to become a sales opportunity */
-export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isError?: boolean) => void; onOpenModels: () => void }) {
+/** `onOpenModels` is left out while the Insights tab is hidden, and the "How scoring works" link goes with it */
+export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isError?: boolean) => void; onOpenModels?: () => void }) {
   const [data, setData] = useState<LeadScoresOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scoring, setScoring] = useState(false);
@@ -197,7 +198,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
             ? " The scoring model is still a starter model built on sample data. Set each lead's stage as deals progress and it will learn from your own results."
             : " The model learns from the stages you set, so keep them up to date."}
         </p>
-        <button className="link-btn" onClick={onOpenModels}>How scoring works <ArrowRight size={14} style={{ verticalAlign: "-2px" }} /></button>
+        {onOpenModels && <button className="link-btn" onClick={onOpenModels}>How scoring works <ArrowRight size={14} style={{ verticalAlign: "-2px" }} /></button>}
       </div>
     </div>
   );

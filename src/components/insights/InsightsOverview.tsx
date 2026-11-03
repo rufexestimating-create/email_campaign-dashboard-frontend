@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, BrainCircuit, ClipboardCheck, Clock, Flame, Inbox, Send, ShieldCheck } from "lucide-react";
-import { DecisionLog, ModelInfo, SendTimeInsights, TrackingSummary, callApi } from "@/lib/insights";
+import { DecisionLog, LeadScoresOverview, ModelInfo, SendTimeInsights, TrackingSummary, callApi } from "@/lib/insights";
 import type { InsightsSection } from "./InsightsPage";
 
 const AUDIENCE_NAME: Record<string, string> = { contractor: "contractors", architect: "architects", homeowner: "homeowners", other: "business contacts" };
@@ -14,25 +14,28 @@ interface Live {
   sendTime: SendTimeInsights | null;
   tracking: TrackingSummary | null;
   model: ModelInfo | null;
+  leads: LeadScoresOverview | null;
   reviews: DecisionLog | null;
 }
 
 /** Insights start page: three numbers at a glance, then one card per question people actually have */
-export function InsightsOverview({ open, onNewCampaign }: { open: (s: InsightsSection) => void; onNewCampaign: () => void }) {
+/** `spamEnabled` false: "Predictions" means the lead scoring model (the spam model is moving to its own app) */
+export function InsightsOverview({ open, onNewCampaign, spamEnabled }: { open: (s: InsightsSection) => void; onNewCampaign: () => void; spamEnabled: boolean }) {
   const [live, setLive] = useState<Live | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
-      const [sendTime, tracking, model, reviews] = await Promise.all([
+      const [sendTime, tracking, model, leads, reviews] = await Promise.all([
         callApi<SendTimeInsights>("/insights/send-time"),
         callApi<TrackingSummary>("/insights/tracking-summary"),
-        callApi<ModelInfo>("/insights/model"),
+        spamEnabled ? callApi<ModelInfo>("/insights/model") : Promise.resolve({ data: null, error: null }),
+        spamEnabled ? Promise.resolve({ data: null, error: null }) : callApi<LeadScoresOverview>("/leads/scores"),
         callApi<DecisionLog>("/campaign/preflight/decisions?limit=1"),
       ]);
-      setLive({ sendTime: sendTime.data, tracking: tracking.data, model: model.data, reviews: reviews.data });
+      setLive({ sendTime: sendTime.data, tracking: tracking.data, model: model.data, leads: leads.data, reviews: reviews.data });
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [spamEnabled]);
 
   // At a glance
   const windows = live?.sendTime ? Object.entries(live.sendTime.windows) : [];
@@ -41,7 +44,13 @@ export function InsightsOverview({ open, onNewCampaign }: { open: (s: InsightsSe
   const ev = live?.tracking?.events;
   const tracked = ev ? ev.delivered + ev.opened + ev.clicked + ev.replied : 0;
   const reviews = live?.reviews?.summary.decisions ?? 0;
-  const modelWord = live?.model?.available ? quality(live.model.metrics?.roc_auc) : "Not set up";
+  // Spam detector off: judge the lead scoring model on its main question (will this lead become a sales opportunity)
+  const sql = live?.leads?.model?.comparison.sql;
+  const sqlUsed = sql && (sql.winner === "logistic_regression" ? sql.logistic_regression : sql.lightgbm ?? sql.hist_gradient_boosting);
+  const modelWord = spamEnabled
+    ? live?.model?.available ? quality(live.model.metrics?.roc_auc) : "Not set up"
+    : live?.leads?.model ? quality(sqlUsed?.pr_auc) : "Not set up";
+  const starterModel = spamEnabled ? live?.model?.data_source === "synthetic" : live?.leads?.model?.data_source === "synthetic";
 
   const cards: { id: InsightsSection; icon: React.ReactNode; question: string; text: string; hint: string; cta: string }[] = [
     {
@@ -76,7 +85,7 @@ export function InsightsOverview({ open, onNewCampaign }: { open: (s: InsightsSe
     },
     {
       id: "models", icon: <BrainCircuit size={20} />, question: "How reliable are the predictions?",
-      text: "How accurate the inbox and lead predictions are, explained in plain words.",
+      text: spamEnabled ? "How accurate the inbox and lead predictions are, explained in plain words." : "How accurate the lead predictions are, explained in plain words.",
       hint: `Prediction quality: ${modelWord}`,
       cta: "See prediction quality",
     },
@@ -105,7 +114,7 @@ export function InsightsOverview({ open, onNewCampaign }: { open: (s: InsightsSe
           <div>
             <span><BrainCircuit size={14} /> Predictions</span>
             <strong>{!live ? "…" : modelWord}</strong>
-            <em>{live?.model?.data_source === "synthetic" ? "starter model" : "learned from your data"}</em>
+            <em>{starterModel ? "starter model" : spamEnabled ? "learned from your data" : "lead scoring"}</em>
           </div>
         </div>
       </section>
