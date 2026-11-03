@@ -15,12 +15,12 @@ const ICON: Record<CheckStatus, React.ReactNode> = {
 };
 
 const VERDICT: Record<CheckStatus, { icon: React.ReactNode; title: string; sub: string }> = {
-  pass: { icon: <ShieldCheck size={22} />, title: "Ready to send", sub: "All eight checks pass." },
-  warn: { icon: <ShieldAlert size={22} />, title: "Review before sending", sub: "Some checks have warnings. You can fix them in one click, or send as it is." },
-  fail: { icon: <AlertOctagon size={22} />, title: "Sending is blocked", sub: "At least one check failed. Fix it, or override with a reason." },
+  pass: { icon: <ShieldCheck size={22} />, title: "Ready to send", sub: "All checks pass." },
+  warn: { icon: <ShieldAlert size={22} />, title: "A few suggestions", sub: "Nothing is blocking this send. Use a one-click fix, or send it as it is." },
+  fail: { icon: <AlertOctagon size={22} />, title: "Over today's sending limit", sub: "Send to fewer people, schedule it for tomorrow, or override with a reason." },
 };
 
-/** The pre-send review, built on the preflight checks. A failed check blocks Send until it is fixed or overridden with a reason. */
+/** The pre-send review. Only going over today's sending limit blocks Send (until fixed or overridden with a reason); the rest is advice. */
 export function PreflightDialog({
   open,
   loading,
