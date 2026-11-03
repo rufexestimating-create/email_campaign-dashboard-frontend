@@ -323,6 +323,7 @@ const EVENT_LABELS: Record<string, string> = {
   delivered: "Delivered",
   opened: "Opened",
   clicked: "Clicked",
+  replied: "Replied",
   bounced: "Bounced",
   complained: "Marked as spam",
   delivery_delayed: "Delayed",
@@ -337,7 +338,7 @@ export function emailStatus(status: string, lastEvent?: string | null): { label:
   if (status === "simulated") return { label: "Test only", tone: "neutral" };
   const label = (lastEvent && EVENT_LABELS[lastEvent]) || "Sent";
   if (lastEvent === "bounced" || lastEvent === "complained") return { label, tone: "danger" };
-  if (lastEvent === "opened" || lastEvent === "clicked") return { label, tone: "success" };
+  if (lastEvent === "opened" || lastEvent === "clicked" || lastEvent === "replied") return { label, tone: "success" };
   if (lastEvent === "delivered") return { label, tone: "success" };
   if (lastEvent === "delivery_delayed") return { label, tone: "warning" };
   return { label, tone: "info" };

@@ -20,8 +20,9 @@ export interface EmailLog {
 
 const AVATAR_TONES = ["primary", "info", "violet", "success", "warning"];
 
-const isDelivered = (l: EmailLog) => ["delivered", "opened", "clicked"].includes(l.last_event ?? "");
-const isOpened = (l: EmailLog) => ["opened", "clicked"].includes(l.last_event ?? "");
+// A replied email was delivered and opened too
+const isDelivered = (l: EmailLog) => ["delivered", "opened", "clicked", "replied"].includes(l.last_event ?? "");
+const isOpened = (l: EmailLog) => ["opened", "clicked", "replied"].includes(l.last_event ?? "");
 const isProblem = (l: EmailLog) => l.status === "failed" || ["bounced", "complained"].includes(l.last_event ?? "");
 
 function avatarTone(email: string) {

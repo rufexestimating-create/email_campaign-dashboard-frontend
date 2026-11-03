@@ -18,6 +18,11 @@ const BAND_ICON: Record<ScoreBand, React.ReactNode> = { sales: <Flame size={17} 
 const BAND_TONE: Record<ScoreBand, string> = { sales: "stat--success", nurture: "stat--violet", awareness: "stat--info" };
 const pct = (p: number | null) => (p === null ? "—" : `${Math.round(p * 100)}%`);
 
+// Lead scoring (reply / interested / ready-to-buy chances, priority bands, engagement) is hidden for now: its model
+// still learns from sample data and most leads have no score, so the numbers would mislead. The list, search and the
+// stage you set stay. Set to true to show the scores again.
+const SHOW_LEAD_SCORES = false;
+
 /** Likelihood as a small bar plus the number, so a column of them reads at a glance */
 function Likelihood({ p }: { p: number | null }) {
   return (
@@ -86,7 +91,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
 
   return (
     <div className="lab-stack">
-      {data.alerts.length > 0 && (
+      {SHOW_LEAD_SCORES && data.alerts.length > 0 && (
         <div className="alert alert-success" role="status">
           <Flame size={18} />
           <div>
@@ -101,9 +106,9 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
         <div className="stat stat--feature">
           <div className="stat-top">All leads<span className="stat-icon"><Users size={17} /></span></div>
           <div className="stat-value">{data.leads.length}</div>
-          <div className="stat-foot">{data.last_scored ? `Updated ${formatDateTime(data.last_scored)}` : "Not scored yet"}</div>
+          <div className="stat-foot">{!SHOW_LEAD_SCORES ? "Everyone your campaigns have emailed" : data.last_scored ? `Updated ${formatDateTime(data.last_scored)}` : "Not scored yet"}</div>
         </div>
-        {(Object.keys(BAND_INFO) as ScoreBand[]).map((b) => (
+        {SHOW_LEAD_SCORES && (Object.keys(BAND_INFO) as ScoreBand[]).map((b) => (
           <button
             key={b}
             className={`stat ${BAND_TONE[b]} stat-btn ${band === b ? "is-active" : ""}`}
@@ -127,6 +132,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
             <option value="all">All stages</option>
             {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
+          {SHOW_LEAD_SCORES && (<>
           <div className="leads-segments" aria-label="Engagement segments">
             {Object.entries(data.segments).map(([s, n]) => <span key={s} className="pill no-dot tone-neutral">{s} · {n}</span>)}
           </div>
@@ -138,13 +144,14 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
           >
             <RefreshCw size={14} className={scoring ? "spin" : ""} /> {scoring ? "Updating…" : "Update scores"}
           </button>
+          </>)}
         </div>
 
         {shown.length === 0 ? (
           <div className="empty">
             <div className="empty-icon"><Users size={24} /></div>
             <h3>{data.leads.length ? "No leads match these filters" : "No leads yet"}</h3>
-            <p>{data.leads.length ? "Try clearing the search or filters." : "Everyone you email becomes a lead. Send a campaign, then update scores."}</p>
+            <p>{data.leads.length ? "Try clearing the search or filters." : "Everyone you email becomes a lead. Send a campaign and they appear here."}</p>
             {data.leads.length > 0 && (
               <button className="btn btn-secondary btn-sm" onClick={() => { setQuery(""); setBand("all"); setStage("all"); }}>
                 Clear search and filters
@@ -157,12 +164,14 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
               <thead>
                 <tr>
                   <th>Lead</th>
+                  {SHOW_LEAD_SCORES && (<>
                   <th title="Chance they reply to your emails">Will reply</th>
                   <th title="Chance they become genuinely interested">Interested</th>
                   <th title="Chance they become ready to talk business">Ready to buy</th>
                   <th>Priority</th>
                   <th>Engagement</th>
-                  <th title="Set this yourself as the conversation moves on. The scores learn from it.">Stage (you set)</th>
+                  </>)}
+                  <th title="Set this yourself as the conversation moves on.">Stage (you set)</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,11 +181,13 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
                       <strong className="leads-name">{l.name || l.email}</strong>
                       <div className="field-hint">{[l.name ? l.email : null, l.company, l.persona].filter(Boolean).join(" · ") || "No details yet"}</div>
                     </td>
+                    {SHOW_LEAD_SCORES && (<>
                     <td><Likelihood p={l.p_reply} /></td>
                     <td><Likelihood p={l.p_mql} /></td>
                     <td><Likelihood p={l.p_sql} /></td>
                     <td>{l.score_band ? <span className={`pill no-dot ${BAND_INFO[l.score_band].tone}`}>{BAND_INFO[l.score_band].label}</span> : "—"}</td>
                     <td>{l.segment ?? "—"}</td>
+                    </>)}
                     <td>
                       <select className="input lab-select-sm" aria-label={`Stage for ${l.email}`} value={l.lifecycle_stage} onChange={(e) => changeStage(l, e.target.value as LifecycleStage)}>
                         {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -190,7 +201,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
         )}
       </div>
 
-      <div className="leads-note">
+      {SHOW_LEAD_SCORES && <div className="leads-note">
         <Info size={16} aria-hidden="true" />
         <p>
           Likelihoods are estimates based on the emails each contact has received, their clicks and replies, and their profile.
@@ -199,7 +210,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
             : " The model learns from the stages you set, so keep them up to date."}
         </p>
         {onOpenModels && <button className="link-btn" onClick={onOpenModels}>How scoring works <ArrowRight size={14} style={{ verticalAlign: "-2px" }} /></button>}
-      </div>
+      </div>}
     </div>
   );
 }

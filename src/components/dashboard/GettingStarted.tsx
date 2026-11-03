@@ -84,7 +84,7 @@ export function GettingStarted({
     },
     {
       id: "leads", icon: <Users size={18} />, title: "See who's most interested",
-      text: "Everyone you email becomes a lead, ranked by how likely they are to become a client.",
+      text: "Everyone you email becomes a lead, so you can track each conversation from first email to customer.",
       done: (tracking?.leads ?? 0) > 0, cta: "Open leads", onClick: onOpenLeads,
     },
   ];

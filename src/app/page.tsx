@@ -57,7 +57,7 @@ const PAGES: Record<Tab, { title: string; sub: string }> = {
   templates: { title: "Templates", sub: "Ready-to-use emails you can start from." },
   activity: { title: "Sent emails", sub: "Every email your campaigns have sent, and whether it arrived." },
   knowledge: { title: "Spam guide", sub: "Check any email, and learn the words and habits that send emails to spam." },
-  leads: { title: "Leads", sub: "Everyone you've emailed, ranked by how likely they are to become a sales opportunity." },
+  leads: { title: "Leads", sub: "Everyone your campaigns have emailed. Set each person's stage as the conversation moves on." },
   insights: { title: "Insights", sub: "When to send, how your emails are landing, and how your team uses the pre-send review." },
 };
 
