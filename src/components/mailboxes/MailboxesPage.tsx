@@ -9,6 +9,8 @@ import { formatDateTime } from "@/lib/campaigns";
 import { callApi } from "@/lib/insights";
 import type { ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
 import { useDialogFocus } from "@/components/dashboard/useDialogFocus";
+import { ChatPanel } from "./ChatPanel";
+import { NewslettersPanel } from "./NewslettersPanel";
 
 type Health = "healthy" | "fair" | "poor" | "starting" | "paused" | "error";
 
@@ -282,6 +284,9 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           </div>
         )}
       </div>
+
+      <ChatPanel mailboxes={data.mailboxes} notify={notify} />
+      <NewslettersPanel mailboxes={data.mailboxes} notify={notify} confirm={confirm} />
 
       <div className="card">
         <h2 className="card-title"><ShieldCheck size={17} /> How the warm-up works</h2>
