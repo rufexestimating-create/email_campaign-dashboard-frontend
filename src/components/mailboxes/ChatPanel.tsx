@@ -176,7 +176,12 @@ export function ChatPanel({ mailboxes, notify }: { mailboxes: ChatMailbox[]; not
             so it counts for the warm-up, and it&apos;s opened and taken out of spam on the other side.
           </p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => setGrouping(true)}><Plus size={15} /> New group</button>
+        <div className="chat-new-group">
+          <button className="btn btn-secondary btn-sm" onClick={() => setGrouping(true)} disabled={mailboxes.length < 3}>
+            <Plus size={15} /> New group
+          </button>
+          {mailboxes.length < 3 && <span className="field-hint">Groups need 3 or more mailboxes. With two, use their private chat.</span>}
+        </div>
       </div>
 
       <div className={`chat${active ? " has-active" : ""}`}>
@@ -249,6 +254,15 @@ export function ChatPanel({ mailboxes, notify }: { mailboxes: ChatMailbox[]; not
                   })
                 )}
               </div>
+              {data && data.thread.kind === "group" && (
+                <p className="chat-hint">
+                  {data.thread.members.length < 3
+                    ? "This group has the same two mailboxes as their private chat. Groups are for 3 or more mailboxes: one message reaches everyone."
+                    : data.messages.some((m) => m.from_mailbox_id !== current)
+                      ? "Every message here goes to all members. Use “Reply privately” under someone's message to answer only them."
+                      : "Every message here goes to all members. “Reply privately” shows under other members' messages: switch “Chatting as” to see it."}
+                </p>
+              )}
               <form className="chat-compose" onSubmit={(e) => { e.preventDefault(); send(); }}>
                 {quote && (
                   <div className="chat-quoting">

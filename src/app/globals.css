@@ -2172,6 +2172,8 @@ select.input {
 .chat-compose textarea { flex: 1; resize: none; min-height: 46px; max-height: 160px; line-height: 1.45; }
 .chat-quoting { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--text-2); background: var(--surface-2); border-left: 3px solid var(--primary); padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); min-width: 0; }
 .chat-quoting span { flex: 1; }
+.chat-new-group { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; text-align: right; max-width: 240px; }
+.chat-hint { font-size: 0.76rem; color: var(--text-3); padding: 0.5rem 1rem; border-top: 1px solid var(--border); background: var(--surface-2); }
 .chat-pick { border: none; padding: 0; margin: 1rem 0 0; display: flex; flex-direction: column; gap: 0.45rem; }
 .chat-pick legend { margin-bottom: 0.4rem; }
 .chat-pick-row { display: flex; align-items: center; gap: 0.55rem; font-size: 0.86rem; cursor: pointer; }
