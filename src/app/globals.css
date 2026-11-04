@@ -2198,3 +2198,22 @@ select.input {
 .nl-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-top: auto; }
 .nl-custom { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; align-items: end; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .nl-more { margin-top: 1rem; }
+.nl-view { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; margin-top: 0.15rem; }
+.dialog.nl-reader { max-width: 1100px; width: 100%; height: min(86vh, 820px); display: flex; flex-direction: column; padding: 1.1rem; }
+.nl-reader-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.8rem; }
+.nl-reader-head p { color: var(--text-3); font-size: 0.82rem; margin-top: 0.15rem; }
+.nl-reader-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.nl-reader-list { list-style: none; overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface-2); padding: 0.4rem; display: flex; flex-direction: column; gap: 2px; }
+.nl-reader-item { width: 100%; text-align: left; border: none; background: none; padding: 0.55rem 0.6rem; border-radius: var(--radius-sm); cursor: pointer; display: flex; flex-direction: column; min-width: 0; gap: 0.1rem; }
+.nl-reader-item:hover { background: var(--surface-3); }
+.nl-reader-item.is-active { background: var(--primary-soft); }
+.nl-reader-item strong { font-size: 0.85rem; font-weight: 620; }
+.nl-reader-item span { font-size: 0.74rem; color: var(--text-3); }
+.nl-reader-view { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.nl-reader-meta { padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.15rem; }
+.nl-reader-meta span { font-size: 0.78rem; color: var(--text-3); }
+.nl-reader-view iframe { flex: 1; width: 100%; border: none; background: #fff; }
+@media (max-width: 760px) {
+  .nl-reader-body { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
+  .nl-reader-list { border-right: none; border-bottom: 1px solid var(--border); }
+}

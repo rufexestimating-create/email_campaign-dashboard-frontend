@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, Newspaper, Plus, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Copy, ExternalLink, Mail, Newspaper, Plus, Trash2, X } from "lucide-react";
+import { useDialogFocus } from "@/components/dashboard/useDialogFocus";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
 import { callApi } from "@/lib/insights";
@@ -39,6 +40,7 @@ export function NewslettersPanel({
   const [custom, setCustom] = useState({ name: "", sender_domains: "", signup_url: "" });
   const [showCustom, setShowCustom] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [reading, setReading] = useState<Subscription | null>(null);
   const current = mailboxes.some((m) => m.id === me) ? me : mailboxes[0]?.id ?? "";
 
   const load = useCallback(async () => {
@@ -95,6 +97,9 @@ export function NewslettersPanel({
         {s.received_count} received{s.rescued_count ? ` · ${s.rescued_count} out of spam` : ""}
         {s.last_received_at ? ` · last ${formatDateTime(s.last_received_at)}` : ""}
       </span>
+      {s.received_count > 0 && (
+        <button className="link-btn nl-view" onClick={() => setReading(s)}><Mail size={13} /> View emails</button>
+      )}
     </div>
   );
 
@@ -221,6 +226,85 @@ export function NewslettersPanel({
           )}
         </>
       )}
+      {reading && <NewsletterReader sub={reading} mailbox={box.email} onClose={() => setReading(null)} />}
+    </div>
+  );
+}
+
+interface EmailRow { uid: string; from: string; subject: string; date: string | null; seen: boolean }
+interface EmailFull { uid: string; from: string; subject: string; date: string | null; html: string }
+
+/** A newsletter's emails, read straight from the mailbox's inbox. The email runs in a sandboxed frame (no scripts). */
+function NewsletterReader({ sub, mailbox, onClose }: { sub: Subscription; mailbox: string; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [rows, setRows] = useState<EmailRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<EmailFull | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  useDialogFocus(ref, true);
+
+  useEffect(() => {
+    let live = true;
+    callApi<EmailRow[]>(`/mailboxes/newsletters/${sub.id}/emails`).then((res) => {
+      if (!live) return;
+      setRows(res.data ?? []);
+      setError(res.error);
+    });
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      live = false;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [sub.id, onClose]);
+
+  const show = async (uid: string) => {
+    setLoading(uid);
+    const res = await callApi<EmailFull>(`/mailboxes/newsletters/${sub.id}/emails/${uid}`);
+    setLoading(null);
+    if (res.data) setOpen(res.data);
+    else setError(res.error);
+  };
+
+  return (
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div ref={ref} className="dialog nl-reader" role="dialog" aria-modal="true" aria-labelledby="nl-reader-title" onClick={(e) => e.stopPropagation()}>
+        <div className="nl-reader-head">
+          <div>
+            <h3 id="nl-reader-title">{sub.name}</h3>
+            <p>Emails in {mailbox}&apos;s inbox, last 30 days</p>
+          </div>
+          <button className="icon-btn" aria-label="Close" onClick={onClose}><X size={16} /></button>
+        </div>
+        {error && <p className="field-hint mb-error">{error}</p>}
+        <div className="nl-reader-body">
+          <ul className="nl-reader-list">
+            {!rows ? <li><div className="loader" /></li> : rows.length === 0 ? (
+              <li className="field-hint">No emails from {sub.name} in the inbox yet.</li>
+            ) : rows.map((r) => (
+              <li key={r.uid}>
+                <button className={`nl-reader-item${open?.uid === r.uid ? " is-active" : ""}`} onClick={() => show(r.uid)} disabled={loading === r.uid}>
+                  <strong className="truncate">{r.subject}</strong>
+                  <span className="truncate">{r.date ? formatDateTime(r.date) : ""}{r.seen ? " · read" : ""}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="nl-reader-view">
+            {open ? (
+              <>
+                <div className="nl-reader-meta">
+                  <strong>{open.subject}</strong>
+                  <span>{open.from}{open.date ? ` · ${formatDateTime(open.date)}` : ""}</span>
+                </div>
+                <iframe title={open.subject} sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={open.html} />
+              </>
+            ) : (
+              <p className="chat-empty-line">{loading ? "Opening…" : "Pick an email on the left to read it."}</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
