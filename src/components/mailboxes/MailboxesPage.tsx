@@ -305,25 +305,32 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
         </ul>
       </div>
 
-      <MailboxDialog
-        open={adding}
-        defaults={data.defaults}
-        onClose={() => setAdding(false)}
-        onSave={async (body) => {
-          const ok = await request("add", "/mailboxes", "POST", body, `${body.email} added. Its warm-up starts with the next plan, within a few minutes.`);
-          if (ok) setAdding(false);
-        }}
-        saving={busy === "add"}
-      />
-      <PasswordDialog
-        mailbox={passwordFor}
-        onClose={() => setPasswordFor(null)}
-        saving={busy === "pw"}
-        onSave={async (password) => {
-          const ok = await request("pw", `/mailboxes/${passwordFor!.id}`, "PATCH", { password }, `${passwordFor!.email} is connected again.`);
-          if (ok) setPasswordFor(null);
-        }}
-      />
+      {/* Mounted only while open, so each opening starts with an empty form and nothing later (saving, the
+          minute refresh) clears what was typed */}
+      {adding && (
+        <MailboxDialog
+          open
+          defaults={data.defaults}
+          onClose={() => setAdding(false)}
+          onSave={async (body) => {
+            const ok = await request("add", "/mailboxes", "POST", body, `${body.email} added. Its warm-up starts with the next plan, within a few minutes.`);
+            if (ok) setAdding(false);
+          }}
+          saving={busy === "add"}
+        />
+      )}
+      {passwordFor && (
+        <PasswordDialog
+          key={passwordFor.id}
+          mailbox={passwordFor}
+          onClose={() => setPasswordFor(null)}
+          saving={busy === "pw"}
+          onSave={async (password) => {
+            const ok = await request("pw", `/mailboxes/${passwordFor.id}`, "PATCH", { password }, `${passwordFor.email} is connected again.`);
+            if (ok) setPasswordFor(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -419,23 +426,20 @@ function MailboxDialog({
   saving: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const blank = useCallback(() => ({ email: "", password: "", display_name: "", daily_limit: 30, username: "", ...defaults }), [defaults]);
-  const [form, setForm] = useState(blank);
+  // The form starts empty once, when the dialog opens (it is mounted only while open). Resetting it in an effect
+  // cleared what was typed as soon as Save was pressed, since `saving` and `onClose` change on every render.
+  const [form, setForm] = useState(() => ({ email: "", password: "", display_name: "", daily_limit: 30, username: "", ...defaults }));
   useDialogFocus(ref, open);
 
   useEffect(() => {
     if (!open) return;
-    const timer = setTimeout(() => setForm(blank()), 0);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !saving && onClose();
     window.addEventListener("keydown", onKey);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, blank, onClose, saving]);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, saving]);
 
   if (!open) return null;
-  const set = (k: keyof ReturnType<typeof blank>) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
 
   return (
@@ -515,18 +519,15 @@ function PasswordDialog({
   saving: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Starts empty when the dialog opens (mounted per mailbox); not reset again while saving
   const [password, setPassword] = useState("");
   useDialogFocus(ref, !!mailbox);
 
   useEffect(() => {
     if (!mailbox) return;
-    const timer = setTimeout(() => setPassword(""), 0);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !saving && onClose();
     window.addEventListener("keydown", onKey);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [mailbox, onClose, saving]);
 
   if (!mailbox) return null;
