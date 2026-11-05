@@ -14,12 +14,15 @@ import {
   FlaskConical,
   Gauge,
   Info,
+  Pencil,
   Repeat,
+  RotateCcw,
   Save,
   Send,
   ShieldCheck,
   Sparkles,
   Upload,
+  UserPlus,
   Users,
   X,
   Zap,
@@ -39,6 +42,7 @@ import {
   describeCron,
   formatDateTime,
   humanizeTags,
+  isEmail,
   mergeRecipients,
   parseCsv,
   parsePasted,
@@ -122,6 +126,11 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const [csvError, setCsvError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  // People added one by one with the small form, and anyone taken off the list with the x on their chip
+  const [added, setAdded] = useState<Recipient[]>([]);
+  const [newPerson, setNewPerson] = useState({ name: "", email: "" });
+  const [addError, setAddError] = useState<string | null>(null);
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
 
   // Content
   const [contentType, setContentType] = useState<ContentType>(initialTemplate?.content_type ?? "text");
@@ -133,6 +142,12 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const [b, setB] = useState<Content>({ subject: "", body: "" });
   const [split, setSplit] = useState(50);
   const [templateName, setTemplateName] = useState<string | null>(null);
+  // "A different email for each person": each person's own subject and message, keyed by lower-case address.
+  // People without an entry get the main email.
+  const [personal, setPersonal] = useState(false);
+  const [own, setOwn] = useState<Record<string, Content>>({});
+  const [focus, setFocus] = useState<string | null>(null);
+  const [peopleQuery, setPeopleQuery] = useState("");
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const lastField = useRef<Record<Version, FieldName>>({ A: "body", B: "body" });
 
@@ -169,18 +184,67 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   }, [scheduleType, cron, timezone]);
 
   const pastedParsed = useMemo(() => parsePasted(pasted), [pasted]);
-  const merged = useMemo(() => mergeRecipients(csv?.recipients ?? [], pastedParsed.recipients), [csv, pastedParsed]);
+  const merged = useMemo(() => mergeRecipients(csv?.recipients ?? [], pastedParsed.recipients, added), [csv, pastedParsed, added]);
 
   // Tells the dashboard there's unsent work here, so starting another campaign asks before clearing it
-  const dirty = !!(name.trim() || pasted.trim() || csv || a.subject.trim() || a.body.trim());
+  const dirty = !!(name.trim() || pasted.trim() || csv || added.length || a.subject.trim() || a.body.trim());
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   // Contacts removed by a pre-send recommendation (bounced before, emailed too recently, generic inboxes…)
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
-  const recipients = useMemo(() => merged.recipients.filter((r) => !excluded.has(r.email.toLowerCase())), [merged, excluded]);
-  const excludedCount = merged.recipients.length - recipients.length;
-  const previewRecipient = recipients[0];
+  const recipients = useMemo(
+    () => merged.recipients.filter((r) => !excluded.has(r.email.toLowerCase()) && !removed.has(r.email.toLowerCase())),
+    [merged, excluded, removed]
+  );
+  const excludedCount = merged.recipients.filter((r) => excluded.has(r.email.toLowerCase())).length;
+  const removedCount = merged.recipients.filter((r) => removed.has(r.email.toLowerCase()) && !excluded.has(r.email.toLowerCase())).length;
+  const keyOf = (r: Recipient) => r.email.toLowerCase();
+  // In "a different email for each person", the preview follows the person being edited
+  const previewRecipient = (personal && recipients.find((r) => keyOf(r) === focus)) || recipients[0];
+  const previewOwn = personal && previewRecipient ? own[keyOf(previewRecipient)] : undefined;
+  const previewA: Content = previewOwn ?? a;
+  const editedCount = personal ? recipients.filter((r) => own[keyOf(r)]).length : 0;
+
+  /** The main email as this person would get it: their name and details filled in ("there" for a missing first name) */
+  const mainFor = (r: Recipient): Content => {
+    const first = r.name?.trim().split(/\s+/)[0] || "";
+    return {
+      subject: renderPreview(a.subject, r).replace(/\s*,\s*([!?.])/g, "$1").replace(/,\s*$/, "").trim(),
+      body: renderPreview(a.body.replace(/{{\s*first_name\s*}}/gi, first || "there"), r),
+    };
+  };
+  const editOwn = (r: Recipient, field: keyof Content, value: string) =>
+    setOwn((o) => ({ ...o, [keyOf(r)]: { ...(o[keyOf(r)] ?? mainFor(r)), [field]: value } }));
+  const resetOwn = (r: Recipient) =>
+    setOwn((o) => {
+      const next = { ...o };
+      delete next[keyOf(r)];
+      return next;
+    });
+
+  const addPerson = () => {
+    const email = newPerson.email.trim();
+    setAddError(null);
+    if (!isEmail(email)) return setAddError("That doesn't look like an email address.");
+    const key = email.toLowerCase();
+    if (recipients.some((r) => keyOf(r) === key)) return setAddError(`${email} is already on the list.`);
+    setRemoved((set) => {
+      const next = new Set(set);
+      next.delete(key);
+      return next;
+    });
+    if (!merged.recipients.some((r) => keyOf(r) === key)) setAdded((list) => [...list, { email, name: newPerson.name.trim() || undefined, variables: {} }]);
+    setNewPerson({ name: "", email: "" });
+  };
+  const removePerson = (r: Recipient) => {
+    const key = keyOf(r);
+    if (added.some((x) => keyOf(x) === key) && !csv?.recipients.some((x) => keyOf(x) === key) && !pastedParsed.recipients.some((x) => keyOf(x) === key)) {
+      setAdded((list) => list.filter((x) => keyOf(x) !== key));
+    } else {
+      setRemoved((set) => new Set(set).add(key));
+    }
+  };
 
   // Live inbox score while writing: checked 800ms after typing stops, or straight away after a one-click fix
   const [spam, setSpam] = useState<Record<Version, SpamResult | null>>({ A: null, B: null });
@@ -256,7 +320,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   useEffect(() => {
     const timer = setTimeout(() => {
       (["A", "B"] as const).forEach(async (v) => {
-        const body = v === "A" ? a.body : b.body;
+        const body = v === "A" ? previewA.body : b.body;
         if (!body.trim() || (v === "B" && !abEnabled)) return setDesigned((d) => ({ ...d, [v]: "" }));
         try {
           const res = await apiFetch("/campaigns/email-preview", {
@@ -273,7 +337,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
       });
     }, 350);
     return () => clearTimeout(timer);
-  }, [a.body, b.body, abEnabled, contentType, senderName, previewRecipient]);
+  }, [previewA.body, b.body, abEnabled, contentType, senderName, previewRecipient]);
   const invalidCount = pastedParsed.invalid.length + (csv?.invalid.length ?? 0);
   const tags = ["first_name", "name", "email", ...(csv?.columns ?? []).filter((c) => !["name", "email", "first_name", "last_name", "full_name"].includes(c))];
   const aCount = abEnabled && recipients.length > 1 ? Math.min(Math.max(Math.round((recipients.length * split) / 100), 1), recipients.length - 1) : recipients.length;
@@ -351,6 +415,10 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
     if (!a.body.trim()) return "Write the message for your email.";
     if (abEnabled && (!b.subject.trim() || !b.body.trim())) return "You're testing two versions, so version B needs a subject and message too.";
     if (abEnabled && recipients.length < 2) return "Testing two versions needs at least 2 recipients.";
+    if (personal) {
+      const blank = recipients.find((r) => own[keyOf(r)] && (!own[keyOf(r)].subject.trim() || !own[keyOf(r)].body.trim()));
+      if (blank) return `The email for ${blank.name || blank.email} needs a subject and a message. Fill them in, or click "Use the main email".`;
+    }
     if (asDraft) return null;
     if (scheduleType === "once" && !sendAtIso) return "Choose the date and time to send.";
     if (scheduleType === "once" && sendAtIso && new Date(sendAtIso) < new Date()) return "That time has already passed. Choose a time in the future.";
@@ -373,7 +441,10 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
           subject: a.subject,
           body: a.body,
           ab_test: { enabled: abEnabled, subject_b: b.subject, body_b: b.body, split },
-          recipients,
+          recipients: recipients.map((r) => {
+            const mine = personal ? own[keyOf(r)] : undefined;
+            return mine ? { ...r, subject: mine.subject, body: mine.body } : r;
+          }),
           schedule: {
             type: scheduleType,
             send_at: scheduleType === "once" ? sendAtIso : null,
@@ -751,12 +822,36 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
             </div>
           </div>
 
+          <div className="add-person">
+            <span className="field-label">Or add people one by one</span>
+            <div className="add-person-row">
+              <input className="input" placeholder="Name (optional)" value={newPerson.name} maxLength={200} aria-label="Name"
+                onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPerson())} />
+              <input className="input" type="email" placeholder="Email address" value={newPerson.email} aria-label="Email address"
+                onChange={(e) => setNewPerson({ ...newPerson, email: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPerson())} />
+              <button type="button" className="btn btn-secondary" onClick={addPerson} disabled={!newPerson.email.trim()}>
+                <UserPlus size={15} /> Add
+              </button>
+            </div>
+            {addError && <span className="cell-error" role="alert">{addError}</span>}
+          </div>
+
           <div className="recipient-bar">
             <Users size={18} color="var(--primary)" />
             <span className="big">{recipients.length}</span>
             <span>{recipients.length === 1 ? "person" : "people"} will receive this email</span>
             {invalidCount > 0 && <span className="pill tone-warning">{invalidCount} invalid address{invalidCount === 1 ? "" : "es"} skipped</span>}
             {merged.duplicates > 0 && <span className="pill tone-neutral">{merged.duplicates} duplicate{merged.duplicates === 1 ? "" : "s"} removed</span>}
+            {removedCount > 0 && (
+              <span className="pill tone-neutral no-dot">
+                {removedCount} taken off by you ·{" "}
+                <button type="button" className="link-btn" style={{ fontSize: "inherit" }} onClick={() => setRemoved(new Set())}>
+                  Undo
+                </button>
+              </span>
+            )}
             {excludedCount > 0 && (
               <span className="pill tone-violet no-dot">
                 {excludedCount} removed by recommendations ·{" "}
@@ -768,12 +863,15 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
           </div>
           {recipients.length > 0 && (
             <div className="recipient-chips">
-              {recipients.slice(0, 8).map((r) => (
+              {recipients.slice(0, 12).map((r) => (
                 <span key={r.email} className="recipient-chip" title={r.email}>
                   {r.name ? `${r.name} · ${r.email}` : r.email}
+                  <button type="button" className="recipient-chip-x" onClick={() => removePerson(r)} aria-label={`Take ${r.email} off the list`} title="Take off the list">
+                    <X size={12} />
+                  </button>
                 </span>
               ))}
-              {recipients.length > 8 && <span className="recipient-chip">+{recipients.length - 8} more</span>}
+              {recipients.length > 12 && <span className="recipient-chip">+{recipients.length - 12} more</span>}
             </div>
           )}
         </section>
@@ -843,6 +941,103 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
               </div>
             )}
           </div>
+
+          <div className="personal-mode">
+            <span className="field-label">Who gets what</span>
+            <div className="segmented" role="group" aria-label="Who gets what">
+              <button type="button" aria-pressed={!personal} className={!personal ? "active" : ""} onClick={() => setPersonal(false)}>
+                Same email for everyone
+              </button>
+              <button type="button" aria-pressed={personal} className={personal ? "active" : ""}
+                onClick={() => {
+                  setPersonal(true);
+                  setAbEnabled(false);
+                  if (!focus && recipients[0]) setFocus(keyOf(recipients[0]));
+                }}>
+                A different email for each person
+              </button>
+            </div>
+            {!personal ? (
+              <span className="field-hint">Everyone gets the email above, with their own name filled in.</span>
+            ) : recipients.length === 0 ? (
+              <p className="field-hint">Add people in step 2 first. Then click each person here to write their own email.</p>
+            ) : (() => {
+              const current = recipients.find((r) => keyOf(r) === focus) ?? recipients[0];
+              const idx = recipients.indexOf(current);
+              const mine = own[keyOf(current)];
+              const shown = mine ?? mainFor(current);
+              const q = peopleQuery.trim().toLowerCase();
+              const list = q ? recipients.filter((r) => `${r.name ?? ""} ${r.email}`.toLowerCase().includes(q)) : recipients;
+              return (
+                <div className="personal">
+                  <p className="field-hint">
+                    The email above is the starting point. Click a person and change their subject or message. Anyone you don&apos;t change gets the email above.
+                  </p>
+                  <div className="personal-grid">
+                    <div className="personal-list">
+                      {recipients.length > 8 && (
+                        <input className="input" placeholder="Find a person" value={peopleQuery} onChange={(e) => setPeopleQuery(e.target.value)} aria-label="Find a person" />
+                      )}
+                      <ul>
+                        {list.map((r) => (
+                          <li key={r.email}>
+                            <button type="button" className={`personal-row${keyOf(r) === keyOf(current) ? " is-active" : ""}`} onClick={() => setFocus(keyOf(r))}>
+                              <span className="personal-row-text">
+                                <strong className="truncate">{r.name || r.email.split("@")[0]}</strong>
+                                <span className="truncate">{r.email}</span>
+                              </span>
+                              {own[keyOf(r)] ? (
+                                <span className="pill tone-success no-dot"><Pencil size={11} /> Own email</span>
+                              ) : (
+                                <span className="personal-main">Main email</span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                        {list.length === 0 && <li className="field-hint" style={{ padding: "0.5rem" }}>Nobody matches.</li>}
+                      </ul>
+                    </div>
+                    <div className="personal-editor">
+                      <div className="personal-editor-head">
+                        <div style={{ minWidth: 0 }}>
+                          <strong className="truncate">{current.name || current.email}</strong>
+                          <span className="field-hint">{mine ? "Their own email" : "Gets the main email. Change anything below to give them their own."}</span>
+                        </div>
+                        <span className="field-hint">{idx + 1} of {recipients.length}</span>
+                      </div>
+                      <label className="field">
+                        <span className="field-label">Subject</span>
+                        <input className="input" maxLength={255} value={shown.subject} onChange={(e) => editOwn(current, "subject", e.target.value)} />
+                      </label>
+                      <label className="field">
+                        <span className="field-label">Message</span>
+                        <textarea className={`input textarea ${contentType === "html" ? "mono" : ""}`} rows={9} value={shown.body}
+                          onChange={(e) => editOwn(current, "body", e.target.value)} />
+                      </label>
+                      <div className="personal-actions">
+                        {mine ? (
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => resetOwn(current)}>
+                            <RotateCcw size={14} /> Use the main email
+                          </button>
+                        ) : <span />}
+                        <div style={{ display: "flex", gap: "0.4rem" }}>
+                          <button type="button" className="btn btn-secondary btn-sm" disabled={idx <= 0} onClick={() => setFocus(keyOf(recipients[idx - 1]))}>
+                            Previous
+                          </button>
+                          <button type="button" className="btn btn-secondary btn-sm" disabled={idx >= recipients.length - 1} onClick={() => setFocus(keyOf(recipients[idx + 1]))}>
+                            Next person
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="personal-summary">
+                    <strong>{editedCount}</strong> of {recipients.length} {recipients.length === 1 ? "person has" : "people have"} their own email. The rest get the main email.
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
         </section>
 
         {/* 4. A/B test */}
@@ -852,10 +1047,14 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
               <h2 className="card-title">
                 {stepBadge(4)} Test two versions <span className="pill tone-violet no-dot">Optional</span>
               </h2>
-              <p className="card-sub">Send a second version to part of your list and see which one people open more.</p>
+              <p className="card-sub">
+                {personal
+                  ? "Not available while each person gets their own email."
+                  : "Send a second version to part of your list and see which one people open more."}
+              </p>
             </div>
             <label className="switch">
-              <input type="checkbox" aria-label="Test two versions" checked={abEnabled} onChange={(e) => setAbEnabled(e.target.checked)} />
+              <input type="checkbox" aria-label="Test two versions" checked={abEnabled} disabled={personal} onChange={(e) => setAbEnabled(e.target.checked)} />
               <span className="switch-track" />
               {abEnabled ? "On" : "Off"}
             </label>
@@ -1023,14 +1222,14 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
             <div>
               <h2 className="card-title">Preview</h2>
               <p className="card-sub">
-                {recipients[0] ? `How ${recipients[0].name?.split(" ")[0] || recipients[0].email} will see it` : "Add people to see personalization"}
+                {previewRecipient ? `How ${previewRecipient.name?.split(" ")[0] || previewRecipient.email} will see it` : "Add people to see personalization"}
               </p>
             </div>
           </div>
           {(abEnabled ? (["A", "B"] as const) : (["A"] as const)).map((v) => {
-            const content = v === "A" ? a : b;
-            const subject = renderPreview(content.subject, recipients[0]);
-            const body = renderPreview(content.body, recipients[0]);
+            const content = v === "A" ? previewA : b;
+            const subject = renderPreview(content.subject, previewRecipient);
+            const body = renderPreview(content.body, previewRecipient);
             return (
               <div key={v} className="email-preview">
                 <div className="email-head">
@@ -1040,7 +1239,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                     </div>
                   )}
                   <div className="row"><span>From</span><span>{fromDisplay}</span></div>
-                  <div className="row"><span>To</span><span>{recipients[0]?.email ?? "—"}</span></div>
+                  <div className="row"><span>To</span><span>{previewRecipient?.email ?? "—"}</span></div>
                   <div className="email-subject">{subject || <span className="muted">Your subject line</span>}</div>
                 </div>
                 {body && designed[v] ? (
@@ -1088,7 +1287,12 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                   value: recipients.length ? `${recipients.length} ${recipients.length === 1 ? "person" : "people"}` : "Nobody yet",
                   step: 2,
                 },
-                { ok: stepDone[3], label: "Subject and message", value: stepDone[3] ? "Written" : "Missing", step: 3 },
+                {
+                  ok: stepDone[3],
+                  label: "Subject and message",
+                  value: !stepDone[3] ? "Missing" : personal ? `Written · ${editedCount} with their own` : "Written",
+                  step: 3,
+                },
                 spamEnabled && {
                   ok: !spamWorst || spamWorst.level === "good",
                   warn: !!spamWorst && spamWorst.level !== "good",
