@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, ArrowDownLeft, ArrowUpRight, ChevronDown, Flame, Inbox, KeyRound, Mail, Pause, Play, Plus, RefreshCw, ShieldCheck, Trash2,
+  AlertCircle, ArrowDownLeft, Settings, ArrowUpRight, ChevronDown, Flame, Inbox, KeyRound, Mail, Pause, Play, Plus, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -22,6 +22,8 @@ interface MailboxRow {
   last_error: string | null;
   last_checked_at: string | null;
   daily_limit: number;
+  warmup_increase: number | null;
+  warmup_reply_rate: number | null;
   warmup_day: number;
   target_today: number;
   sent_today: number;
@@ -82,6 +84,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [passwordFor, setPasswordFor] = useState<MailboxRow | null>(null);
+  const [settingsFor, setSettingsFor] = useState<MailboxRow | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -256,6 +259,9 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                               onClick={() => request(`test-${m.id}`, `/mailboxes/${m.id}/test`, "POST", undefined, `${m.email} can log in to send and read.`)}>
                               <RefreshCw size={15} className={busy === `test-${m.id}` ? "spin" : ""} />
                             </button>
+                            <button className="icon-btn" aria-label={`Warm-up settings of ${m.email}`} title="Warm-up settings" onClick={() => setSettingsFor(m)}>
+                              <Settings size={15} />
+                            </button>
                             <button className="icon-btn danger" aria-label={`Remove ${m.email}`} title="Remove"
                               onClick={() => confirm({
                                 title: `Remove ${m.email}?`,
@@ -324,6 +330,18 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
             if (ok) setAdding(false);
           }}
           saving={busy === "add"}
+        />
+      )}
+      {settingsFor && (
+        <SettingsDialog
+          key={settingsFor.id}
+          mailbox={settingsFor}
+          onClose={() => setSettingsFor(null)}
+          saving={busy === "settings"}
+          onSave={async (body) => {
+            const ok = await request("settings", `/mailboxes/${settingsFor.id}`, "PATCH", body, `Warm-up settings of ${settingsFor.email} saved.`);
+            if (ok) setSettingsFor(null);
+          }}
         />
       )}
       {passwordFor && (
@@ -592,6 +610,65 @@ function PasswordDialog({
           <div className="dialog-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
             <button className="btn btn-primary" disabled={saving || !password}>{saving ? "Checking…" : "Save and reconnect"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+/** Instantly-style settings: how fast the daily number grows, its ceiling, and how many received emails get answered */
+function SettingsDialog({
+  mailbox, onClose, onSave, saving,
+}: {
+  mailbox: MailboxRow;
+  onClose: () => void;
+  onSave: (body: { warmup_increase: number; daily_limit: number; warmup_reply_rate: number }) => void;
+  saving: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [increase, setIncrease] = useState(String(mailbox.warmup_increase ?? 1));
+  const [limit, setLimit] = useState(String(mailbox.daily_limit));
+  const [reply, setReply] = useState(String(mailbox.warmup_reply_rate ?? 30));
+  useDialogFocus(ref, true);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !saving && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, saving]);
+
+  const inc = Number(increase), lim = Number(limit), rep = Number(reply);
+  const valid = Number.isInteger(inc) && inc >= 1 && inc <= 10 && Number.isInteger(lim) && lim >= 2 && lim <= 50 && Number.isInteger(rep) && rep >= 0 && rep <= 100;
+  const days = valid ? Math.ceil((lim - 1) / inc) + 1 : 0;
+  return (
+    <div className="dialog-backdrop" onClick={() => !saving && onClose()}>
+      <div ref={ref} className="dialog" role="dialog" aria-modal="true" aria-labelledby="wu-settings-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="wu-settings-title">Warm-up settings for {mailbox.email}</h3>
+        <p>
+          {mailbox.warmup_increase ? "" : "Right now this mailbox uses the standard ramp (3, 6, 12, then 20 a day). "}
+          Saving these switches it to a gradual ramp: 1 email on day 1, then a few more each day.
+        </p>
+        <form onSubmit={(e) => { e.preventDefault(); if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep }); }}>
+          <label className="field">
+            <span className="field-label">Increase per day</span>
+            <input className="input" type="number" min={1} max={10} required value={increase} onChange={(e) => setIncrease(e.target.value)} />
+            <span className="field-hint">How many more emails it sends each day (1 to 10). Instantly suggests 1.</span>
+          </label>
+          <label className="field">
+            <span className="field-label">Daily warm-up limit</span>
+            <input className="input" type="number" min={2} max={50} required value={limit} onChange={(e) => setLimit(e.target.value)} />
+            <span className="field-hint">The most it sends in a day (2 to 50). {valid ? `It reaches this on day ${days}.` : ""}</span>
+          </label>
+          <label className="field">
+            <span className="field-label">Reply rate (%)</span>
+            <input className="input" type="number" min={0} max={100} required value={reply} onChange={(e) => setReply(e.target.value)} />
+            <span className="field-hint">Share of the warm-up emails it receives that it answers (0 to 100). Instantly suggests 30.</span>
+          </label>
+          <div className="dialog-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" disabled={saving || !valid}>{saving ? "Saving…" : "Save settings"}</button>
           </div>
         </form>
       </div>
