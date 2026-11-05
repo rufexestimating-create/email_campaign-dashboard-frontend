@@ -85,7 +85,10 @@ export interface FollowUpDraft {
   body: string;
 }
 
-export const FOLLOW_UP_WAITS = [2, 3, 4, 5, 7, 10, 14];
+// 0 = a quick test: the follow-up goes about 10 minutes after the first email
+export const FOLLOW_UP_WAITS = [0, 2, 3, 4, 5, 7, 10, 14];
+export const waitLabel = (days: number) => (days === 0 ? "10 minutes (for testing)" : `${days} days`);
+export const waitShort = (days: number) => (days === 0 ? "10 minutes" : `${days} days`);
 export const MAX_FOLLOW_UPS = 2;
 
 export interface CampaignLog {

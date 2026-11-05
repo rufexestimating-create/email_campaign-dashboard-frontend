@@ -50,6 +50,7 @@ import {
   parsePasted,
   renderPreview,
   sendDuration,
+  waitShort,
 } from "@/lib/campaigns";
 import { SpamFix, SpamResult, SpamSpan, applyFix } from "@/lib/spam";
 import { PreflightAction, PreflightResult } from "@/lib/insights";
@@ -1368,7 +1369,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                   ok: true,
                   label: "Follow-ups",
                   value: followUps.length
-                    ? `${followUps.length} · ${followUps.length > 1 ? "first " : ""}after ${followUps[0].wait_days} days`
+                    ? `${followUps.length} · ${followUps.length > 1 ? "first " : ""}after ${waitShort(followUps[0].wait_days)}`
                     : "None",
                   step: 5,
                 },
