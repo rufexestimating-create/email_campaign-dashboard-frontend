@@ -88,7 +88,7 @@ export interface FollowUpDraft {
 
 /** The wait choices: short ones (for trying it out) go right after the wait, day ones at the person's best time */
 export const FOLLOW_UP_WAITS: { id: string; label: string; short: string; wait_days: number; wait_minutes?: number }[] = [
-  { id: "m1", label: "1 minute (to test it now)", short: "1 minute", wait_days: 0, wait_minutes: 1 },
+  { id: "m1", label: "Now (right after the first email)", short: "right away", wait_days: 0, wait_minutes: 1 },
   { id: "m10", label: "10 minutes", short: "10 minutes", wait_days: 0, wait_minutes: 10 },
   { id: "m60", label: "1 hour", short: "1 hour", wait_days: 0, wait_minutes: 60 },
   ...[1, 2, 3, 4, 5, 7, 10, 14].map((d) => ({ id: `d${d}`, label: d === 1 ? "1 day" : `${d} days`, short: d === 1 ? "1 day" : `${d} days`, wait_days: d })),
