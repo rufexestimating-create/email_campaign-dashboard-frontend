@@ -2217,3 +2217,9 @@ select.input {
   .nl-reader-body { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
   .nl-reader-list { border-right: none; border-bottom: 1px solid var(--border); }
 }
+
+/* ---------- New template dialog ---------- */
+.dialog.tpl-new { max-width: 620px; max-height: 92vh; overflow-y: auto; }
+.tpl-new-form { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1rem; }
+.tpl-new-tags { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: -0.4rem; }
+.tpl-hero-side .tpl-hero-btn + .tpl-hero-btn { margin-top: 0.5rem; }

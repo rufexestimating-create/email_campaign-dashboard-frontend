@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Bookmark, Hand, Mail, Newspaper, PenLine, Reply, Rocket, Search, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Bookmark, Hand, Mail, Newspaper, PenLine, Plus, Reply, Rocket, Search, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { Template, humanizeTags } from "@/lib/campaigns";
 import { SpamLevel } from "@/lib/spam";
 import type { ConfirmRequest } from "./ConfirmDialog";
+import { useDialogFocus } from "./useDialogFocus";
 
 type Tone = "primary" | "info" | "violet" | "success" | "warning";
 type Filter = "all" | "builtin" | "saved" | "text" | "html";
@@ -49,6 +50,7 @@ export function TemplatesPanel({
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const remove = (t: Template) =>
     confirm({
@@ -175,8 +177,11 @@ export function TemplatesPanel({
             <div><strong>{templates.filter((t) => t.builtin).length}</strong><span>Ready-made</span></div>
             <div><strong>{allSaved.length}</strong><span>Saved by you</span></div>
           </div>
-          <button className="act act-primary tpl-hero-btn" onClick={onNew}>
-            <PenLine size={16} /> Write from scratch instead
+          <button className="act act-primary tpl-hero-btn" onClick={() => setCreating(true)}>
+            <Plus size={16} /> New template
+          </button>
+          <button className="act tpl-hero-btn" onClick={onNew}>
+            <PenLine size={16} /> Write a campaign from scratch
           </button>
         </div>
       </section>
@@ -202,10 +207,10 @@ export function TemplatesPanel({
             <span className="tpl-empty-icon"><Bookmark size={22} /></span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <strong>No saved templates yet</strong>
-              <p>While writing a campaign, click <b>Save as a template</b> and it will show up here, ready to reuse.</p>
+              <p>Click <b>New template</b> to write one here, or click <b>Save as a template</b> while writing a campaign.</p>
             </div>
-            <button className="act" onClick={onNew}>
-              <PenLine size={15} /> Write a new email
+            <button className="act" onClick={() => setCreating(true)}>
+              <Plus size={15} /> New template
             </button>
           </div>
         </>
@@ -232,6 +237,115 @@ export function TemplatesPanel({
           <p>Try a different word or filter.</p>
         </div>
       )}
+
+      {creating && (
+        <NewTemplateDialog
+          onClose={() => setCreating(false)}
+          onSaved={(name) => {
+            setCreating(false);
+            onChanged(`"${name}" saved. It's under Saved by you.`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const TAGS = [
+  { tag: "{{first_name}}", label: "First name" },
+  { tag: "{{name}}", label: "Full name" },
+  { tag: "{{email}}", label: "Email" },
+];
+
+/** Writes a template straight from the Templates page (no campaign needed) */
+function NewTemplateDialog({ onClose, onSaved }: { onClose: () => void; onSaved: (name: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const [form, setForm] = useState({ name: "", subject: "", body: "", content_type: "text" as "text" | "html" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useDialogFocus(ref, true);
+
+  // The dashboard re-renders every 10 s with a new onClose; a ref keeps the Escape listener (and the form) steady
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /** Puts a personalisation tag where the cursor is in the message */
+  const insert = (tag: string) => {
+    const el = bodyRef.current;
+    const at = el ? el.selectionStart : form.body.length;
+    const end = el ? el.selectionEnd : at;
+    setForm((f) => ({ ...f, body: f.body.slice(0, at) + tag + f.body.slice(end) }));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(at + tag.length, at + tag.length);
+    });
+  };
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/templates", { method: "POST", body: JSON.stringify({ ...form, name: form.name.trim() }) });
+      if (res.ok) return onSaved(form.name.trim());
+      setError(errorMessage(await res.json(), "The template couldn't be saved."));
+    } catch {
+      setError(NETWORK_ERROR);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="dialog-backdrop" onClick={() => !saving && onClose()}>
+      <div ref={ref} className="dialog tpl-new" role="dialog" aria-modal="true" aria-labelledby="new-template-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="new-template-title">New template</h3>
+        <p>Write it once, then pick it with <b>Use this template</b> whenever you start a campaign.</p>
+        <form className="tpl-new-form" onSubmit={save}>
+          <label className="field">
+            <span className="field-label">Template name</span>
+            <input className="input" required maxLength={120} autoFocus value={form.name} placeholder="Kitchen remodel intro"
+              onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <div className="field">
+            <span className="field-label">Format</span>
+            <div className="segmented" role="group" aria-label="Format">
+              <button type="button" className={form.content_type === "text" ? "active" : ""} onClick={() => setForm({ ...form, content_type: "text" })}>Simple text</button>
+              <button type="button" className={form.content_type === "html" ? "active" : ""} onClick={() => setForm({ ...form, content_type: "html" })}>HTML design</button>
+            </div>
+          </div>
+          <label className="field">
+            <span className="field-label">Subject</span>
+            <input className="input" required maxLength={255} value={form.subject} placeholder="Ideas for your kitchen, {{first_name}}"
+              onChange={(e) => setForm({ ...form, subject: e.target.value })} />
+          </label>
+          <label className="field">
+            <span className="field-label">Message</span>
+            <textarea ref={bodyRef} className="input textarea" required rows={9} value={form.body}
+              placeholder={form.content_type === "html" ? "<p>Hi {{first_name}},</p>" : "Hi {{first_name}},"}
+              onChange={(e) => setForm({ ...form, body: e.target.value })} />
+          </label>
+          <div className="tpl-new-tags">
+            <span className="field-hint">Add to the message:</span>
+            {TAGS.map((t) => (
+              <button key={t.tag} type="button" className="btn btn-secondary btn-sm" onClick={() => insert(t.tag)}>{t.label}</button>
+            ))}
+          </div>
+          {error && <p className="field-hint mb-error" role="alert">{error}</p>}
+          <div className="dialog-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" disabled={saving}><Plus size={15} /> {saving ? "Saving…" : "Save template"}</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
