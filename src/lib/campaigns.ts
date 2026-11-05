@@ -363,3 +363,27 @@ export const formatDateTime = (iso: string | null) =>
 export const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0);
 
 export const SAMPLE_CSV = "email,name,company\njane@example.com,Jane Doe,Acme Inc\njohn@example.com,John Smith,Globex\n";
+
+/** A file where every person has their own subject and message (one row each) */
+export const SAMPLE_PERSONAL_CSV =
+  "email,name,subject,message\n" +
+  'jane@example.com,Jane Doe,Ideas for your kitchen,"Hi Jane,\n\nI saw your kitchen plans and have a few ideas that could save you time. Can I send them over?\n\nThanks"\n' +
+  'john@example.com,John Smith,Drawings for the new office,"Hi John,\n\nWe can have the first drawings for your office ready by Friday. Does that work for you?\n\nBest"\n';
+
+/** Spreadsheet columns read as a person's own subject / message ("Subject", "Email subject", "Message", "Body"...) */
+export const SUBJECT_COLUMNS = ["subject", "email_subject", "subject_line"];
+export const MESSAGE_COLUMNS = ["message", "body", "email_body", "email_message", "email_text", "text"];
+
+/** Each person's own subject and message from their spreadsheet row, keyed by lower-case address */
+export function ownFromCsv(recipients: Recipient[], columns: string[]): Record<string, { subject: string; body: string }> {
+  const subjectKey = SUBJECT_COLUMNS.find((k) => columns.includes(k));
+  const bodyKey = MESSAGE_COLUMNS.find((k) => columns.includes(k));
+  const out: Record<string, { subject: string; body: string }> = {};
+  if (!subjectKey && !bodyKey) return out;
+  for (const r of recipients) {
+    const subject = (subjectKey ? r.variables[subjectKey] : "")?.trim() ?? "";
+    const body = (bodyKey ? r.variables[bodyKey] : "")?.trim() ?? "";
+    if (subject || body) out[r.email.toLowerCase()] = { subject, body };
+  }
+  return out;
+}

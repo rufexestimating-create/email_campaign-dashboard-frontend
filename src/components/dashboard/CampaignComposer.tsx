@@ -34,6 +34,7 @@ import {
   Frequency,
   Recipient,
   SAMPLE_CSV,
+  SAMPLE_PERSONAL_CSV,
   SEND_SPEEDS,
   SendSpeed,
   Template,
@@ -44,6 +45,7 @@ import {
   humanizeTags,
   isEmail,
   mergeRecipients,
+  ownFromCsv,
   parseCsv,
   parsePasted,
   renderPreview,
@@ -148,6 +150,8 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const [own, setOwn] = useState<Record<string, Content>>({});
   const [focus, setFocus] = useState<string | null>(null);
   const [peopleQuery, setPeopleQuery] = useState("");
+  // How many people got their own email from the uploaded file's subject / message columns
+  const [fromFile, setFromFile] = useState(0);
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const lastField = useRef<Record<Version, FieldName>>({ A: "body", B: "body" });
 
@@ -205,6 +209,20 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const previewOwn = personal && previewRecipient ? own[keyOf(previewRecipient)] : undefined;
   const previewA: Content = previewOwn ?? a;
   const editedCount = personal ? recipients.filter((r) => own[keyOf(r)]).length : 0;
+  const everyoneOwn = personal && recipients.length > 0 && editedCount === recipients.length;
+  // Messages from a file often start straight with the text ("I wanted to ask..."): offer to add a greeting
+  const GREETING = /^\s*(hi|hello|hey|dear|good (morning|afternoon|evening)|greetings|<p>\s*(hi|hello|hey|dear))\b/i;
+  const noGreeting = personal ? recipients.filter((r) => own[keyOf(r)]?.body.trim() && !GREETING.test(own[keyOf(r)].body)) : [];
+  const addGreetings = () =>
+    setOwn((o) => {
+      const next = { ...o };
+      for (const r of noGreeting) {
+        const mine = next[keyOf(r)];
+        next[keyOf(r)] = { ...mine, body: contentType === "html" ? `<p>Hi {{first_name}},</p>\n${mine.body}` : `Hi {{first_name}},\n\n${mine.body}` };
+      }
+      return next;
+    });
+  const firstOwn = personal ? recipients.map((r) => own[keyOf(r)]).find(Boolean) : undefined;
 
   /** The main email as this person would get it: their name and details filled in ("there" for a missing first name) */
   const mainFor = (r: Recipient): Content => {
@@ -359,13 +377,23 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
       return;
     }
     setCsv({ fileName: file.name, recipients: result.recipients, invalid: result.invalid, columns: result.columns });
+    // A file with a subject and/or message column: each person gets the email written in their row
+    const mine = ownFromCsv(result.recipients, result.columns);
+    const count = Object.keys(mine).length;
+    setFromFile(count);
+    if (count) {
+      setOwn((o) => ({ ...o, ...mine }));
+      setPersonal(true);
+      setAbEnabled(false);
+      setFocus(Object.keys(mine)[0]);
+    }
   };
 
-  const downloadSample = () => {
-    const url = URL.createObjectURL(new Blob([SAMPLE_CSV], { type: "text/csv" }));
+  const downloadSample = (personalSample = false) => {
+    const url = URL.createObjectURL(new Blob([personalSample ? SAMPLE_PERSONAL_CSV : SAMPLE_CSV], { type: "text/csv" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "contacts-sample.csv";
+    link.download = personalSample ? "different-email-for-each-person.csv" : "contacts-sample.csv";
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -411,8 +439,8 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const validate = (asDraft: boolean): string | null => {
     if (!name.trim()) return "Give your campaign a name so you can find it later.";
     if (!recipients.length) return "Add at least one person to send to. Paste email addresses or upload a spreadsheet.";
-    if (!a.subject.trim()) return "Add a subject line.";
-    if (!a.body.trim()) return "Write the message for your email.";
+    if (!everyoneOwn && !a.subject.trim()) return "Add a subject line.";
+    if (!everyoneOwn && !a.body.trim()) return "Write the message for your email.";
     if (abEnabled && (!b.subject.trim() || !b.body.trim())) return "You're testing two versions, so version B needs a subject and message too.";
     if (abEnabled && recipients.length < 2) return "Testing two versions needs at least 2 recipients.";
     if (personal) {
@@ -438,8 +466,9 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
           from_email: senderName.trim() && defaultFrom ? fromDisplay : null,
           reply_to: replyTo.trim() || null,
           content_type: contentType,
-          subject: a.subject,
-          body: a.body,
+          // With an own email for everyone, the main email may be empty: the first person's stands in for it
+          subject: a.subject.trim() ? a.subject : firstOwn?.subject ?? a.subject,
+          body: a.body.trim() ? a.body : firstOwn?.body ?? a.body,
           ab_test: { enabled: abEnabled, subject_b: b.subject, body_b: b.body, split },
           recipients: recipients.map((r) => {
             const mine = personal ? own[keyOf(r)] : undefined;
@@ -633,7 +662,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
   const stepDone: Record<number, boolean> = {
     1: !!name.trim(),
     2: recipients.length > 0,
-    3: !!(a.subject.trim() && a.body.trim()),
+    3: !!(a.subject.trim() && a.body.trim()) || everyoneOwn,
     4: abEnabled && !!(b.subject.trim() && b.body.trim()),
     5:
       scheduleType === "now" ||
@@ -765,9 +794,14 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
             <div className="field">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" }}>
                 <span className="field-label">Upload a spreadsheet (CSV)</span>
-                <button type="button" className="link-btn" style={{ fontSize: "0.82rem" }} onClick={downloadSample}>
-                  <Download size={13} style={{ verticalAlign: "-2px" }} /> Get a sample file
-                </button>
+                <span style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap" }}>
+                  <button type="button" className="link-btn" style={{ fontSize: "0.82rem" }} onClick={() => downloadSample(false)}>
+                    <Download size={13} style={{ verticalAlign: "-2px" }} /> Sample file
+                  </button>
+                  <button type="button" className="link-btn" style={{ fontSize: "0.82rem" }} onClick={() => downloadSample(true)}>
+                    <Download size={13} style={{ verticalAlign: "-2px" }} /> Sample: different email for each person
+                  </button>
+                </span>
               </div>
               {csv ? (
                 <div className="file-chip">
@@ -779,7 +813,7 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                       {csv.columns.length > 0 && ` · ${csv.columns.map(prettyKey).join(", ")}`}
                     </div>
                   </div>
-                  <button type="button" className="icon-btn" onClick={() => setCsv(null)} title="Remove file" aria-label="Remove file">
+                  <button type="button" className="icon-btn" onClick={() => { setCsv(null); setFromFile(0); }} title="Remove file" aria-label="Remove file">
                     <X size={16} />
                   </button>
                 </div>
@@ -804,7 +838,9 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                 >
                   <span className="drop-zone-icon"><Upload size={20} /></span>
                   <div><strong>Drop your file here</strong> or click to browse</div>
-                  <span className="field-hint">Needs an &quot;email&quot; column. Extra columns like name or company can personalize your email.</span>
+                  <span className="field-hint">
+                    Needs an &quot;email&quot; column. Add &quot;subject&quot; and &quot;message&quot; columns to give each person their own email.
+                  </span>
                 </div>
               )}
               <input
@@ -819,6 +855,11 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
                 }}
               />
               {csvError && <span className="cell-error" role="alert">{csvError}</span>}
+              {csv && fromFile > 0 && (
+                <span className="file-note">
+                  <CheckCircle2 size={14} /> {fromFile} {fromFile === 1 ? "person gets" : "people get"} the subject and message from their row. Check them in step 3.
+                </span>
+              )}
             </div>
           </div>
 
@@ -970,9 +1011,30 @@ export function CampaignComposer({ templates, defaultFrom, mode, initialTemplate
               const list = q ? recipients.filter((r) => `${r.name ?? ""} ${r.email}`.toLowerCase().includes(q)) : recipients;
               return (
                 <div className="personal">
-                  <p className="field-hint">
-                    The email above is the starting point. Click a person and change their subject or message. Anyone you don&apos;t change gets the email above.
-                  </p>
+                  {fromFile > 0 && csv ? (
+                    <div className="alert alert-info" style={{ margin: 0 }}>
+                      <FileSpreadsheet size={18} />
+                      <div>
+                        <strong>{fromFile} of {recipients.length} people get their own email from {csv.fileName}.</strong>{" "}
+                        Click anyone to check or change it.
+                        {fromFile < recipients.length ? " Everyone else gets the email above." : " The email above is only needed if you add more people."}
+                      </div>
+                    </div>
+                  ) : null}
+                  {noGreeting.length > 0 ? (
+                    <div className="alert alert-warning" style={{ margin: 0 }}>
+                      <AlertTriangle size={18} />
+                      <div>
+                        <strong>{noGreeting.length} {noGreeting.length === 1 ? "message starts" : "messages start"} without a greeting</strong> (no &quot;Hi …,&quot;).{" "}
+                        <button type="button" className="link-btn" onClick={addGreetings}>Add &quot;Hi [First name],&quot; at the top</button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {fromFile > 0 && csv ? null : (
+                    <p className="field-hint">
+                      The email above is the starting point. Click a person and change their subject or message. Anyone you don&apos;t change gets the email above.
+                    </p>
+                  )}
                   <div className="personal-grid">
                     <div className="personal-list">
                       {recipients.length > 8 && (

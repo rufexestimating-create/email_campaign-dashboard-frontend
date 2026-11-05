@@ -2253,3 +2253,5 @@ select.input {
   .personal-grid { grid-template-columns: 1fr; }
   .personal-list { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
 }
+.file-note { display: flex; align-items: flex-start; gap: 0.35rem; font-size: 0.8rem; color: var(--success); margin-top: 0.4rem; }
+.file-note svg { flex: none; margin-top: 2px; }
