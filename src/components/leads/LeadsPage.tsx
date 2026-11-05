@@ -283,9 +283,14 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
   /** Interested: while the interest is fresh, offer to send their waiting follow-up now instead of days later */
   const offerFollowUpNow = async (lead: ScoredLead) => {
     const who = lead.name || lead.email;
-    const res = await callApi<{ pending: number; next_due_at: string | null }>(`/leads/${lead.id}/follow-ups`);
+    const res = await callApi<{ pending: number; next_due_at: string | null; blocked: string | null }>(`/leads/${lead.id}/follow-ups`);
     const waiting = res.data;
     if (!waiting) return notify(`${who} is now interested.`);
+    if (waiting.pending && waiting.blocked) {
+      // Their waiting follow-up would only be skipped (e.g. they already replied): say so, offer to write one by hand
+      notify(`${who} is now interested. Their automatic follow-up won't go out (${waiting.blocked.toLowerCase()}).`);
+      return setWrite({ ...followUp(lead), title: `${who} is interested: write to them now` });
+    }
     if (!waiting.pending) {
       // Nothing automatic is waiting, so offer to write one now
       notify(`${who} is now interested.`);
@@ -299,7 +304,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
       onConfirm: async () => {
         const sent = await callApi<{ queued: number }>(`/leads/${lead.id}/follow-ups/send-now`, {});
         if (sent.error) return notify(sent.error, true);
-        notify(sent.data!.queued ? `Sending ${who}'s follow-up now. It shows in Sent emails within a minute.` : "That follow-up has already gone out.");
+        notify(sent.data!.queued ? `Sending ${who}'s follow-up now. It shows in Sent emails within a minute.` : "Nothing was sent: that follow-up already went out or is stopped.", !sent.data!.queued);
         load();
       },
     });
