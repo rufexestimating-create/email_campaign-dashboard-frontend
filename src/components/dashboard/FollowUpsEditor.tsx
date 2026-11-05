@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Info, MailPlus, Plus, Trash2 } from "lucide-react";
-import { FOLLOW_UP_WAITS, FollowUpDraft, MAX_FOLLOW_UPS, waitLabel } from "@/lib/campaigns";
+import { FOLLOW_UP_WAITS, FollowUpDraft, MAX_FOLLOW_UPS, waitOf } from "@/lib/campaigns";
 
 // Same opt-out line the spam check suggests: follow-ups are marketing email too, so CAN-SPAM applies to each one
 const UNSUBSCRIBE_LINE = "Don't want these emails? Reply \"unsubscribe\" and we'll take you off our list.";
@@ -59,8 +59,12 @@ export function FollowUpsEditor({
                 <span className="followup-step">Follow-up {i + 1}</span>
                 <label className="followup-wait">
                   <span>Send</span>
-                  <select className="input" value={f.wait_days} onChange={(e) => update(i, { wait_days: Number(e.target.value) })} aria-label={`Wait before follow-up ${i + 1}`}>
-                    {FOLLOW_UP_WAITS.map((d) => <option key={d} value={d}>{waitLabel(d)}</option>)}
+                  <select className="input" value={waitOf(f).id} aria-label={`Wait before follow-up ${i + 1}`}
+                    onChange={(e) => {
+                      const w = FOLLOW_UP_WAITS.find((x) => x.id === e.target.value)!;
+                      update(i, { wait_days: w.wait_days, wait_minutes: w.wait_minutes });
+                    }}>
+                    {FOLLOW_UP_WAITS.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
                   </select>
                   <span>after the {i === 0 ? "first email" : "previous follow-up"}</span>
                 </label>

@@ -78,17 +78,23 @@ export interface FollowUpCounts {
   cancelled: number;
 }
 
-/** One follow-up email in the composer; wait_days is counted from the previous email */
+/** One follow-up email in the composer; the wait is counted from the previous email (minutes for short ones) */
 export interface FollowUpDraft {
   wait_days: number;
+  wait_minutes?: number;
   subject: string;
   body: string;
 }
 
-// 0 = a quick test: the follow-up goes about 10 minutes after the first email
-export const FOLLOW_UP_WAITS = [0, 2, 3, 4, 5, 7, 10, 14];
-export const waitLabel = (days: number) => (days === 0 ? "10 minutes (for testing)" : `${days} days`);
-export const waitShort = (days: number) => (days === 0 ? "10 minutes" : `${days} days`);
+/** The wait choices: short ones (for trying it out) go right after the wait, day ones at the person's best time */
+export const FOLLOW_UP_WAITS: { id: string; label: string; short: string; wait_days: number; wait_minutes?: number }[] = [
+  { id: "m1", label: "1 minute (to test it now)", short: "1 minute", wait_days: 0, wait_minutes: 1 },
+  { id: "m10", label: "10 minutes", short: "10 minutes", wait_days: 0, wait_minutes: 10 },
+  { id: "m60", label: "1 hour", short: "1 hour", wait_days: 0, wait_minutes: 60 },
+  ...[1, 2, 3, 4, 5, 7, 10, 14].map((d) => ({ id: `d${d}`, label: d === 1 ? "1 day" : `${d} days`, short: d === 1 ? "1 day" : `${d} days`, wait_days: d })),
+];
+export const waitOf = (f: Pick<FollowUpDraft, "wait_days" | "wait_minutes">) =>
+  FOLLOW_UP_WAITS.find((w) => (f.wait_minutes ? w.wait_minutes === f.wait_minutes : !w.wait_minutes && w.wait_days === f.wait_days)) ?? FOLLOW_UP_WAITS[0];
 export const MAX_FOLLOW_UPS = 2;
 
 export interface CampaignLog {
