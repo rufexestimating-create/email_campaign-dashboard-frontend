@@ -58,11 +58,17 @@ export function ChatPanel({ mailboxes, notify }: { mailboxes: ChatMailbox[]; not
     if (res.data) setList(res.data);
   }, [current]);
 
+  // `notify` is a new function on every dashboard refresh (every 10 s); a ref keeps the thread timer stable
+  const notifyRef = useRef(notify);
+  useEffect(() => {
+    notifyRef.current = notify;
+  });
+
   const loadThread = useCallback(async (id: string) => {
     const res = await callApi<ThreadData>(`/chat/threads/${id}/messages`);
     if (res.data) setData(res.data);
-    else if (res.error) notify(res.error, true);
-  }, [notify]);
+    else if (res.error) notifyRef.current(res.error, true);
+  }, []);
 
   useEffect(() => {
     const first = setTimeout(loadList, 0);

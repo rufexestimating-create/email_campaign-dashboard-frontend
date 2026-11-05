@@ -42,12 +42,17 @@ export function NewslettersPanel({
   const [copied, setCopied] = useState(false);
   const [reading, setReading] = useState<Subscription | null>(null);
   const current = mailboxes.some((m) => m.id === me) ? me : mailboxes[0]?.id ?? "";
+  // The dashboard re-renders every 10 s with a new `notify`; a ref keeps load() (and its timer) stable
+  const notifyRef = useRef(notify);
+  useEffect(() => {
+    notifyRef.current = notify;
+  });
 
   const load = useCallback(async () => {
     const res = await callApi<Data>("/mailboxes/newsletters");
     if (res.data) setData(res.data);
-    else if (res.error) notify(res.error, true);
-  }, [notify]);
+    else if (res.error) notifyRef.current(res.error, true);
+  }, []);
 
   useEffect(() => {
     const first = setTimeout(load, 0);
@@ -241,8 +246,14 @@ function NewsletterReader({ sub, mailbox, onClose }: { sub: Subscription; mailbo
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<EmailFull | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
+  const closeRef = useRef(onClose);
   useDialogFocus(ref, true);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
 
+  // Once per newsletter. It must not depend on onClose: that changes on every dashboard refresh (every 10 s), which
+  // restarted the request before the mailbox answered, so the list never appeared.
   useEffect(() => {
     let live = true;
     callApi<EmailRow[]>(`/mailboxes/newsletters/${sub.id}/emails`).then((res) => {
@@ -250,13 +261,16 @@ function NewsletterReader({ sub, mailbox, onClose }: { sub: Subscription; mailbo
       setRows(res.data ?? []);
       setError(res.error);
     });
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
     return () => {
       live = false;
-      window.removeEventListener("keydown", onKey);
     };
-  }, [sub.id, onClose]);
+  }, [sub.id]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const show = async (uid: string) => {
     setLoading(uid);
