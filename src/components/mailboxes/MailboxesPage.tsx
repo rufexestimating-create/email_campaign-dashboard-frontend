@@ -34,6 +34,7 @@ interface MailboxRow {
   replies_7d: number;
   waiting: number;
   health: Health;
+  ready: boolean;
   series: { date: string; sent: number; inbox: number; spam: number }[];
 }
 
@@ -233,6 +234,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                         <td><Spark series={m.series} /></td>
                         <td>
                           <span className={`pill ${h.tone}`} title={m.health === "error" ? m.last_error ?? "" : h.hint}>{h.label}</span>
+                          {m.ready && <span className="pill tone-success" style={{ marginLeft: 6 }} title="Healthy for 2+ weeks: it's ready to send your campaigns.">Ready for campaigns</span>}
                           {m.status === "error" && m.last_error && <span className="mb-sub mb-error">{m.last_error}</span>}
                         </td>
                         <td>
@@ -273,7 +275,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                       </tr>
                       {isOpen && (
                         <tr className="mb-detail">
-                          <td colSpan={7}><Activity mailboxId={m.id} /></td>
+                          <td colSpan={7}><DomainCheck mailboxId={m.id} /><Activity mailboxId={m.id} /></td>
                         </tr>
                       )}
                     </React.Fragment>
@@ -356,6 +358,42 @@ function Spark({ series }: { series: MailboxRow["series"] }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+interface DomainResult { domain: string; spf: boolean; dkim: boolean; dkim_selector: string | null; dmarc: boolean; dmarc_policy: string | null }
+
+/** SPF / DKIM / DMARC of the mailbox's domain: missing records are a common reason mail lands in spam */
+function DomainCheck({ mailboxId }: { mailboxId: string }) {
+  const [res, setRes] = useState<DomainResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    const r = await callApi<DomainResult>(`/mailboxes/${mailboxId}/domain-check`);
+    setRes(r.data);
+    setError(r.error);
+    setBusy(false);
+  };
+  const row = (ok: boolean, label: string, fix: string) => (
+    <li key={label} style={{ color: ok ? "var(--success)" : "var(--danger, #b42318)" }}>
+      <strong>{ok ? "✓" : "✗"} {label}</strong> <span className="mb-muted">{ok ? "found" : fix}</span>
+    </li>
+  );
+  return (
+    <div style={{ marginBottom: "0.8rem" }}>
+      <button className="btn btn-secondary btn-sm" disabled={busy} onClick={run}>
+        <ShieldCheck size={14} /> {busy ? "Checking…" : "Check domain setup (SPF, DKIM, DMARC)"}
+      </button>
+      {error && <p className="field-hint" role="alert">{error}</p>}
+      {res && (
+        <ul className="mb-tips" style={{ marginTop: "0.5rem" }}>
+          {row(res.spf, `SPF for ${res.domain}`, "missing: add it in your domain's DNS (Hostinger shows the exact record).")}
+          {row(res.dkim, "DKIM", "not found under the usual names. Check Hostinger's email settings; it may use another name.")}
+          {row(res.dmarc, "DMARC", `missing: add a TXT record at _dmarc.${res.domain} such as v=DMARC1; p=none`)}
+        </ul>
+      )}
     </div>
   );
 }
