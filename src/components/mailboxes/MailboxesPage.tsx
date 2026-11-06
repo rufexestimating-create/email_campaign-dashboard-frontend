@@ -543,9 +543,12 @@ function DomainCheck({ mailboxId }: { mailboxId: string }) {
   );
 }
 
+const ACTIVITY_PAGE = 5;
+
 function Activity({ mailboxId }: { mailboxId: string }) {
   const [rows, setRows] = useState<ActivityRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -562,16 +565,23 @@ function Activity({ mailboxId }: { mailboxId: string }) {
   if (error) return <p className="field-hint">{error}</p>;
   if (!rows) return <div className="loader" />;
   if (!rows.length) return <p className="field-hint">No warm-up emails yet. The first ones are planned within a few minutes during office hours.</p>;
+  const pages = Math.ceil(rows.length / ACTIVITY_PAGE);
+  const current = Math.min(page, pages - 1);
+  const shown = rows.slice(current * ACTIVITY_PAGE, (current + 1) * ACTIVITY_PAGE);
   return (
+    <>
     <ul className="mb-activity">
-      {rows.map((r) => (
+      {shown.map((r) => (
         <li key={r.id}>
           <span className={`mb-dir ${r.direction}`} aria-label={r.direction === "out" ? "Sent" : "Received"}>
             {r.direction === "out" ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
           </span>
           <div className="mb-activity-main">
             <strong className="truncate">{r.subject}</strong>
-            <span className="truncate">{r.direction === "out" ? "To" : "From"} {r.other}{r.kind === "reply" ? " · reply" : ""}</span>
+            <span className="truncate">
+              {r.direction === "out" ? "To" : "From"} {r.other}{r.kind === "reply" ? " · reply" : ""}
+              {r.status !== "scheduled" ? ` · ${formatDateTime(r.sent_at ?? r.scheduled_at)}` : ""}
+            </span>
           </div>
           <span className="mb-activity-state">
             {r.status === "scheduled" ? (
@@ -589,6 +599,17 @@ function Activity({ mailboxId }: { mailboxId: string }) {
         </li>
       ))}
     </ul>
+    {pages > 1 && (
+      <div className="wu-pager">
+        <span>{current * ACTIVITY_PAGE + 1}–{Math.min(rows.length, (current + 1) * ACTIVITY_PAGE)} of {rows.length} emails</span>
+        <div>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>‹ Newer</button>
+          <span className="wu-pager-num">Page {current + 1} of {pages}</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Older ›</button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

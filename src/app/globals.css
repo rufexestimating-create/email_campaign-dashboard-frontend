@@ -2411,3 +2411,6 @@ select.input {
 .wu-ready { display: flex; align-items: center; gap: 0.8rem; }
 .wu-progress--wide { flex: 1; height: 10px; }
 .wu-latest .field-hint { margin: -0.3rem 0 0.6rem; }
+.wu-pager { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.7rem; font-size: 0.82rem; color: var(--text-3); }
+.wu-pager > div { display: flex; align-items: center; gap: 0.5rem; }
+.wu-pager-num { min-width: 90px; text-align: center; }
