@@ -588,8 +588,10 @@ function Activity({ mailboxId }: { mailboxId: string }) {
               <span className="pill no-dot tone-neutral">Planned {formatDateTime(r.scheduled_at)}</span>
             ) : r.status === "failed" ? (
               <span className="pill no-dot tone-danger" title={r.error ?? ""}>Failed</span>
+            ) : r.rescued ? (
+              <span className="pill no-dot tone-violet" title="It was in the spam folder and was moved back to the inbox">Saved from spam → Inbox</span>
             ) : r.landed_in === "spam" ? (
-              <span className="pill no-dot tone-warning">{r.rescued ? "Spam → moved to inbox" : "Landed in spam"}</span>
+              <span className="pill no-dot tone-warning">Landed in spam</span>
             ) : r.landed_in === "inbox" ? (
               <span className="pill no-dot tone-success">Inbox</span>
             ) : (
