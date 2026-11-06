@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, ArrowDownLeft, Send, Smile, X, ArrowUpRight, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
+  AlertCircle, ArrowDownLeft, CheckCircle2, Send, Smile, X, ArrowUpRight, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -192,8 +192,45 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
   const openRow = data.mailboxes.find((m) => m.id === open) ?? null;
   const s = data.summary;
   const full = data.mailboxes.length >= data.max_mailboxes;
+  const active = data.mailboxes.filter((m) => m.status === "active");
+  const failing = data.mailboxes.filter((m) => m.status === "error");
+  const allReady = active.length > 0 && active.every((m) => m.ready);
+  const daysLeft = active.length ? Math.max(0, ...active.map((m) => (m.ready ? 0 : READY_DAY - m.warmup_day + 1))) : 0;
+  const n = data.mailboxes.length;
+  const status =
+    n === 0 ? { tone: "info", title: "Let's start: add your company mailboxes", text: "Add two or more mailboxes (for example from Hostinger or Gmail). After that the warm-up runs on its own." }
+    : n === 1 ? { tone: "info", title: "Add one more mailbox to start", text: "Warm-up works by your mailboxes emailing each other, so it needs at least two." }
+    : failing.length ? { tone: "danger", title: `${failing.length} mailbox${failing.length === 1 ? " can't" : "es can't"} log in`, text: "Its password probably changed. Click the red flame next to it and enter the new password." }
+    : !active.length ? { tone: "warning", title: "Warm-up is switched off", text: "Click the grey flame next to a mailbox to switch it on." }
+    : allReady ? { tone: "success", title: "Your mailboxes are ready for campaigns", text: "They have warmed up long enough and their emails reach the inbox. Keep the warm-up on while you send campaigns." }
+    : { tone: "success", title: "Warm-up is running. You don't need to do anything.", text: `Your mailboxes email each other every day by themselves. They should be ready for campaigns in about ${daysLeft} day${daysLeft === 1 ? "" : "s"}.` };
+
   return (
     <div className="lab-stack">
+      <section className={`card wu-hero wu-hero--${status.tone}`} aria-label="Warm-up status">
+        <div className="wu-hero-main">
+          <h2>{status.title}</h2>
+          <p>{status.text}</p>
+          {s.inbox_7d + s.spam_7d > 0 && (
+            <p className="wu-hero-week">This week: <strong>{s.sent_7d}</strong> warm-up emails sent, <strong>{pct(s.inbox_rate_7d)}</strong> reached the inbox.</p>
+          )}
+          {n < 2 && <button className="btn btn-primary" onClick={() => setAdding(true)}><Plus size={16} /> Add a mailbox</button>}
+        </div>
+        <ol className="wu-steps-simple">
+          <li className={n >= 2 ? "done" : ""}><CheckCircle2 size={18} /><span><strong>Add 2 or more mailboxes</strong>Your company email addresses.</span></li>
+          <li className={active.length >= 2 ? "done" : ""}><CheckCircle2 size={18} /><span><strong>Warm-up runs by itself</strong>Every day between {hour(data.window.start)} and {hour(data.window.end)}.</span></li>
+          <li className={allReady ? "done" : ""}><CheckCircle2 size={18} /><span><strong>Wait about 2 weeks</strong>Until each mailbox shows &quot;Ready&quot;. Then send your campaigns.</span></li>
+        </ol>
+        <details className="wu-what">
+          <summary>What is warm-up, and why do I need it?</summary>
+          <p>
+            A new email address that suddenly sends many emails looks like spam to Gmail and Outlook, so its emails land in the spam folder.
+            Warm-up fixes that slowly: your mailboxes send each other a few ordinary emails every day, open them, reply and take them out of spam.
+            After about two weeks Gmail and Outlook trust them, and your real campaigns reach the inbox.
+          </p>
+        </details>
+      </section>
+
       <section className="stats stats--5" aria-label="Warm-up summary">
         <div className="stat stat--feature">
           <div className="stat-top">Email accounts<span className="stat-icon"><Mail size={17} /></span></div>
@@ -237,7 +274,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           <div>
             <h2 className="card-title"><Flame size={17} /> Your mailboxes</h2>
             <p className="card-sub">
-              Warm-up is automatic: they email each other, open each other&apos;s mail, save it from spam and reply. Click a mailbox to see its warm-up analytics and settings. The flame turns its warm-up on or off.
+              Click a mailbox to see its progress and settings. The flame switches its warm-up on (green) or off (grey).
             </p>
           </div>
           <button className="btn btn-primary" onClick={() => setAdding(true)} disabled={full} title={full ? `You can add up to ${data.max_mailboxes} mailboxes` : undefined}>
@@ -289,8 +326,8 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                 onChange={() => setSelected(allShown ? [] : shown.map((m) => m.id))} />
               <span>Name</span>
               <span>Emails sent today</span>
-              <span>Health score</span>
-              <span>Warm-up</span>
+              <span>Reaching inbox</span>
+              <span>On / off</span>
             </div>
             {shown.map((m) => (
               <div
@@ -308,14 +345,21 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                       {m.email}
                     </button>
                     <span className="truncate">
-                      {m.display_name || "—"} · Day {m.warmup_day}
-                      {m.last_activity_at ? ` · Last activity ${formatDateTime(m.last_activity_at)}` : " · No activity yet"}
+                      {m.display_name || "—"}{m.last_activity_at ? ` · Last activity ${formatDateTime(m.last_activity_at)}` : " · No activity yet"}
                     </span>
-                    {(m.ready || m.failed_7d > 0) && (
-                      <span className="wu-acc-tags">
-                        {m.ready && <span className="pill tone-success">Ready for campaigns</span>}
-                        {m.failed_7d > 0 && <span className="pill tone-warning">{m.failed_7d} failed to send</span>}
+                    <span className="wu-progress-row">
+                      <span className="wu-progress" aria-hidden="true">
+                        <i style={{ width: `${m.ready ? 100 : Math.min(100, (m.warmup_day / READY_DAY) * 100)}%` }} className={m.ready ? "done" : ""} />
                       </span>
+                      <span className="wu-progress-text">
+                        {m.ready ? "Ready for campaigns"
+                          : m.status === "paused" ? `Paused on day ${m.warmup_day}`
+                          : m.status === "error" ? "Can't log in"
+                          : `Day ${m.warmup_day} of ${READY_DAY} · about ${Math.max(1, READY_DAY - m.warmup_day + 1)} days to go`}
+                      </span>
+                    </span>
+                    {m.failed_7d > 0 && (
+                      <span className="wu-acc-tags"><span className="pill tone-warning">{m.failed_7d} failed to send</span></span>
                     )}
                   </div>
                 </div>
@@ -337,6 +381,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                   >
                     <Flame size={18} />
                   </button>
+                  <span className="wu-flame-label">{m.status === "active" ? "On" : m.status === "paused" ? "Off" : "Fix"}</span>
                 </div>
               </div>
             ))}
@@ -347,8 +392,13 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
       </div>
 
       {/* Manual chat is hidden: warm-up is fully automatic, like Instantly. ChatPanel and /chat stay in the code. */}
-      <NewslettersPanel mailboxes={data.mailboxes} notify={notify} confirm={confirm} />
+      <details className="wu-extra">
+        <summary>Optional extra: let your mailboxes receive newsletters, like a real inbox</summary>
+        <NewslettersPanel mailboxes={data.mailboxes} notify={notify} confirm={confirm} />
+      </details>
 
+      <details className="wu-extra">
+        <summary>How the warm-up works, in detail</summary>
       <div className="card">
         <h2 className="card-title"><ShieldCheck size={17} /> How the warm-up works</h2>
         <ol className="mb-steps">
@@ -370,6 +420,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           <li>If a login stops working, that mailbox pauses itself and shows <strong>Can&apos;t connect</strong>.</li>
         </ul>
       </div>
+      </details>
 
       {/* Mounted only while open, so each opening starts with an empty form and nothing later (saving, the
           minute refresh) clears what was typed */}
@@ -556,6 +607,13 @@ function MailboxDialog({
   // The form starts empty once, when the dialog opens (it is mounted only while open). Resetting it in an effect
   // cleared what was typed as soon as Save was pressed, since `saving` and `onClose` change on every render.
   const [form, setForm] = useState(() => ({ email: "", password: "", display_name: "", daily_limit: 30, username: "", ...defaults }));
+  const [provider, setProvider] = useState<"hostinger" | "gmail" | "other">("hostinger");
+  const pickProvider = (p: "hostinger" | "gmail" | "other") => {
+    setProvider(p);
+    if (p === "hostinger") setForm((f) => ({ ...f, ...defaults }));
+    if (p === "gmail") setForm((f) => ({ ...f, smtp_host: "smtp.gmail.com", smtp_port: 465, imap_host: "imap.gmail.com", imap_port: 993 }));
+    if (p === "other") setForm((f) => ({ ...f, smtp_host: "", imap_host: "" }));
+  };
   useDialogFocus(ref, open);
 
   useEffect(() => {
@@ -574,6 +632,30 @@ function MailboxDialog({
       <div ref={ref} className="dialog write-email" role="dialog" aria-modal="true" aria-labelledby="add-mailbox-title" onClick={(e) => e.stopPropagation()}>
         <h3 id="add-mailbox-title">Add a mailbox</h3>
         <p>We log in to check it works before saving. The password is stored encrypted.</p>
+        <div className="field">
+          <span className="field-label">Where is this mailbox?</span>
+          <div className="segmented wu-providers" role="radiogroup" aria-label="Email provider">
+            {([["hostinger", "Hostinger"], ["gmail", "Gmail / Google Workspace"], ["other", "Other"]] as const).map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={provider === id} className={provider === id ? "active" : ""} onClick={() => pickProvider(id)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {provider === "gmail" && (
+          <div className="alert alert-info" style={{ margin: "0 0 0.8rem" }}>
+            <AlertCircle size={18} />
+            <div>
+              <strong>Gmail needs an &quot;app password&quot;, not your normal password:</strong>
+              <ol className="wu-gmail-steps">
+                <li>Turn on 2-Step Verification in your Google account.</li>
+                <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">myaccount.google.com/apppasswords</a>, create one and copy the 16 letters.</li>
+                <li>In Gmail: Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP.</li>
+              </ol>
+            </div>
+          </div>
+        )}
+        {provider === "other" && (
+          <p className="field-hint">Open &quot;Server settings&quot; below and type the servers your email provider gives you.</p>
+        )}
         <form
           className="write-email-form"
           onSubmit={(e) => {
@@ -588,20 +670,18 @@ function MailboxDialog({
           <label className="field">
             <span className="field-label">Password</span>
             <input className="input" type="password" required value={form.password} onChange={set("password")} autoComplete="new-password" />
-            <span className="field-hint">The mailbox&apos;s own password, the one you use to log in to Hostinger Mail.</span>
+            <span className="field-hint">{provider === "gmail" ? "The 16-letter app password from Google." : provider === "hostinger" ? "The password you use to log in to Hostinger Mail." : "The mailbox's own password."}</span>
           </label>
-          <div className="grid-2">
+          <label className="field">
+            <span className="field-label">Your name <span className="mb-muted">(optional, shown in the emails)</span></span>
+            <input className="input" value={form.display_name} onChange={set("display_name")} placeholder="Ali Khan" maxLength={80} />
+          </label>
+          <details className="mb-servers" open={provider === "other"}>
+            <summary>Server settings <span className="mb-muted">({provider === "other" ? "fill these in" : "already filled in"})</span></summary>
             <label className="field">
-              <span className="field-label">Name in emails <span className="mb-muted">(optional)</span></span>
-              <input className="input" value={form.display_name} onChange={set("display_name")} placeholder="Ali Khan" maxLength={80} />
-            </label>
-            <label className="field">
-              <span className="field-label">Most emails a day</span>
+              <span className="field-label">Most warm-up emails a day</span>
               <input className="input" type="number" min={2} max={50} required value={form.daily_limit} onChange={set("daily_limit")} />
             </label>
-          </div>
-          <details className="mb-servers">
-            <summary>Server settings <span className="mb-muted">(Hostinger is filled in)</span></summary>
             <div className="grid-2">
               <label className="field">
                 <span className="field-label">Sending server (SMTP)</span>
@@ -754,7 +834,7 @@ function WarmupPanel({
         <div className="segmented wu-tabs" role="tablist">
           {(["analytics", "settings", "emails"] as const).map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-              {t === "analytics" ? "Warm-up analytics" : t === "settings" ? "Settings" : "Emails & domain"}
+              {t === "analytics" ? "Progress" : t === "settings" ? "Settings" : "Emails & checks"}
             </button>
           ))}
         </div>
@@ -851,6 +931,16 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 }
 
 /** Instantly's warm-up settings: basic (ramp, limit, reply rate) and advanced (human-like behaviour) */
+/** A mailbox counts as ready for campaigns after this many healthy warm-up days (server: READY_DAY) */
+const READY_DAY = 14;
+
+/** Simple speed choices (Instantly's suggestion for new mailboxes is 1 more a day, up to 10, 30% replies) */
+const SPEEDS = [
+  { id: "slow", label: "Slow & safe", hint: "Best for new mailboxes. 1 email on day one, up to 10 a day.", increase: 1, limit: 10, reply: 30 },
+  { id: "normal", label: "Normal", hint: "Up to 20 a day.", increase: 2, limit: 20, reply: 30 },
+  { id: "fast", label: "Fast", hint: "Only for mailboxes that already send email. Up to 40 a day.", increase: 4, limit: 40, reply: 30 },
+];
+
 /** What warm-up emails can be about (same ids as the server's warmup_content.TOPICS) */
 const CONTENT_TOPICS = [
   { id: "architecture", label: "Architecture & design" },
@@ -904,6 +994,74 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
       e.preventDefault();
       if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: toSave(adv) }, applyAll);
     }}>
+      <h3 className="wu-sub-title">How fast should it warm up?</h3>
+      <div className="wu-speeds" role="radiogroup" aria-label="Warm-up speed">
+        {SPEEDS.map((sp) => {
+          const on = inc === sp.increase && lim === sp.limit && rep === sp.reply;
+          return (
+            <button key={sp.id} type="button" role="radio" aria-checked={on} className={`wu-speed${on ? " on" : ""}`}
+              onClick={() => { setIncrease(String(sp.increase)); setLimit(String(sp.limit)); setReply(String(sp.reply)); }}>
+              <strong>{sp.label}</strong>
+              <span>{sp.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+      {!SPEEDS.some((sp) => inc === sp.increase && lim === sp.limit && rep === sp.reply) && (
+        <p className="field-hint">Custom speed: {inc} more a day, up to {lim} a day. Pick one above to reset.</p>
+      )}
+
+      <h3 className="wu-sub-title">What should the emails be about?</h3>
+      <p className="field-hint" style={{ marginTop: "-0.3rem" }}>
+        What the warm-up emails talk about. Every email is put together on its own from the topic and your lines, with a greeting and sign-off, so no two are the same.
+      </p>
+      <label className="field">
+        <span className="field-label">Topic</span>
+        <select className="input" value={adv.topic || "architecture"} onChange={(e) => { set("topic", e.target.value); setSamples(null); }}>
+          {CONTENT_TOPICS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        <span className="field-hint">Pick the one closest to your business, so the warm-up reads like your real mail.</span>
+      </label>
+      <label className="field">
+        <span className="field-label">Your own subject lines <em className="mb-muted">(optional, one per line)</em></span>
+        <textarea className="input" rows={3} value={subjectsText} onChange={(e) => { setSubjectsText(e.target.value); setSamples(null); }}
+          placeholder={"Kitchen drawings for review\nSite visit on Friday"} />
+      </label>
+      <label className="field">
+        <span className="field-label">Your own messages <em className="mb-muted">(optional, put a line with --- between messages)</em></span>
+        <textarea className="input" rows={5} value={messagesText} onChange={(e) => { setMessagesText(e.target.value); setSamples(null); }}
+          placeholder={"The 3D views for the client are ready. Can you check them before Friday?\n---\nI've updated the material list with the new tile prices."} />
+        <span className="field-hint">
+          Write only the message: the greeting (Hi …,) and sign-off are added. Use {"{first_name}"} for the other person&apos;s name.
+          {ownSubjects.length || ownMessages.length ? ` ${ownSubjects.length} subject${ownSubjects.length === 1 ? "" : "s"}, ${ownMessages.length} message${ownMessages.length === 1 ? "" : "s"}.` : ""}
+          {adv.topic !== "custom" && (ownSubjects.length || ownMessages.length) ? " About 6 in 10 emails use your lines, the rest come from the topic." : ""}
+        </span>
+      </label>
+      {adv.topic === "custom" && !ownSubjects.length && !ownMessages.length && (
+        <p className="cell-error" role="alert">Add at least one subject or message, or pick a topic.</p>
+      )}
+      <div className="wu-preview-bar">
+        <button type="button" className="btn btn-secondary btn-sm" disabled={previewing || !contentOk} onClick={preview}>
+          {previewing ? "Writing samples…" : samples ? "Show 3 more samples" : "Preview 3 sample emails"}
+        </button>
+        <label className="chat-pick-row">
+          <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
+          <span>Use this email content for all my mailboxes</span>
+        </label>
+      </div>
+      {samples && (
+        <div className="wu-samples">
+          {samples.map((x, i) => (
+            <div key={i} className="wu-sample">
+              <strong>{x.subject}</strong>
+              <pre>{x.body}</pre>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <details className="wu-more">
+        <summary>More settings (optional)</summary>
       <h3 className="wu-sub-title">Warm-up settings</h3>
       <div className="wu-set-grid">
         <label className="field">
@@ -953,55 +1111,6 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
         <Toggle on={weekdays} onChange={setWeekdays} label="Weekdays only" />
       </div>
 
-      <h3 className="wu-sub-title">Warm-up email content</h3>
-      <p className="field-hint" style={{ marginTop: "-0.3rem" }}>
-        What the warm-up emails talk about. Every email is put together on its own from the topic and your lines, with a greeting and sign-off, so no two are the same.
-      </p>
-      <label className="field">
-        <span className="field-label">Topic</span>
-        <select className="input" value={adv.topic || "architecture"} onChange={(e) => { set("topic", e.target.value); setSamples(null); }}>
-          {CONTENT_TOPICS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-        </select>
-        <span className="field-hint">Pick the one closest to your business, so the warm-up reads like your real mail.</span>
-      </label>
-      <label className="field">
-        <span className="field-label">Your own subject lines <em className="mb-muted">(optional, one per line)</em></span>
-        <textarea className="input" rows={3} value={subjectsText} onChange={(e) => { setSubjectsText(e.target.value); setSamples(null); }}
-          placeholder={"Kitchen drawings for review\nSite visit on Friday"} />
-      </label>
-      <label className="field">
-        <span className="field-label">Your own messages <em className="mb-muted">(optional, put a line with --- between messages)</em></span>
-        <textarea className="input" rows={5} value={messagesText} onChange={(e) => { setMessagesText(e.target.value); setSamples(null); }}
-          placeholder={"The 3D views for the client are ready. Can you check them before Friday?\n---\nI've updated the material list with the new tile prices."} />
-        <span className="field-hint">
-          Write only the message: the greeting (Hi …,) and sign-off are added. Use {"{first_name}"} for the other person&apos;s name.
-          {ownSubjects.length || ownMessages.length ? ` ${ownSubjects.length} subject${ownSubjects.length === 1 ? "" : "s"}, ${ownMessages.length} message${ownMessages.length === 1 ? "" : "s"}.` : ""}
-          {adv.topic !== "custom" && (ownSubjects.length || ownMessages.length) ? " About 6 in 10 emails use your lines, the rest come from the topic." : ""}
-        </span>
-      </label>
-      {adv.topic === "custom" && !ownSubjects.length && !ownMessages.length && (
-        <p className="cell-error" role="alert">Add at least one subject or message, or pick a topic.</p>
-      )}
-      <div className="wu-preview-bar">
-        <button type="button" className="btn btn-secondary btn-sm" disabled={previewing || !contentOk} onClick={preview}>
-          {previewing ? "Writing samples…" : samples ? "Show 3 more samples" : "Preview 3 sample emails"}
-        </button>
-        <label className="chat-pick-row">
-          <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
-          <span>Use this email content for all my mailboxes</span>
-        </label>
-      </div>
-      {samples && (
-        <div className="wu-samples">
-          {samples.map((x, i) => (
-            <div key={i} className="wu-sample">
-              <strong>{x.subject}</strong>
-              <pre>{x.body}</pre>
-            </div>
-          ))}
-        </div>
-      )}
-
       <h3 className="wu-sub-title">Advanced warm-up settings</h3>
       <p className="field-hint" style={{ marginTop: "-0.3rem" }}>Make the warm-up behave more like a person.</p>
       <div className="wu-set-row">
@@ -1024,6 +1133,7 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
         <div><strong>Mark important</strong><span>% of the warm-up emails it receives that it marks important (starred).</span></div>
         {percent("important_rate")}
       </div>
+      </details>
       <div className="dialog-actions">
         <button className="btn btn-primary" disabled={saving || !valid}>{saving ? "Saving…" : "Save settings"}</button>
       </div>

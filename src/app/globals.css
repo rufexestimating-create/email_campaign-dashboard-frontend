@@ -2347,3 +2347,38 @@ select.input {
 .wu-sample { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; background: var(--surface); }
 .wu-sample strong { display: block; margin-bottom: 0.35rem; }
 .wu-sample pre { white-space: pre-wrap; font-family: inherit; font-size: 0.86rem; color: var(--text-2); margin: 0; }
+/* Warm-up made simple: status box, steps, progress, speed choices, folded extras */
+.wu-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.2rem 2rem; border-left: 5px solid var(--success); }
+.wu-hero--info { border-left-color: var(--info); } .wu-hero--warning { border-left-color: var(--warning); } .wu-hero--danger { border-left-color: var(--danger); }
+.wu-hero-main h2 { font-size: 1.3rem; margin: 0 0 0.35rem; }
+.wu-hero-main p { margin: 0 0 0.6rem; color: var(--text-2); }
+.wu-hero-week strong { color: var(--text); }
+.wu-steps-simple { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.wu-steps-simple li { display: flex; gap: 0.6rem; align-items: flex-start; color: var(--text-3); }
+.wu-steps-simple li span { display: flex; flex-direction: column; font-size: 0.85rem; }
+.wu-steps-simple li strong { color: var(--text-2); font-size: 0.92rem; }
+.wu-steps-simple li.done svg { color: var(--success); }
+.wu-steps-simple li.done strong { color: var(--text); }
+.wu-what { grid-column: 1 / -1; }
+.wu-what summary, .wu-extra > summary, .wu-more > summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+.wu-what p { margin: 0.5rem 0 0; color: var(--text-2); max-width: 75ch; }
+@media (max-width: 860px) { .wu-hero { grid-template-columns: 1fr; } }
+.wu-progress-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.35rem; }
+.wu-progress { flex: 0 0 140px; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.wu-progress i { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
+.wu-progress i.done { background: var(--success); }
+.wu-progress-text { font-size: 0.78rem; color: var(--text-3); white-space: nowrap; }
+.wu-flame-label { display: block; font-size: 0.7rem; color: var(--text-3); margin-top: 0.2rem; width: 38px; text-align: center; }
+.wu-speeds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+@media (max-width: 560px) { .wu-speeds { grid-template-columns: 1fr; } }
+.wu-speed { text-align: left; border: 1.5px solid var(--border); border-radius: 12px; padding: 0.75rem; background: var(--surface); cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; }
+.wu-speed span { font-size: 0.78rem; color: var(--text-3); }
+.wu-speed.on { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.wu-speed:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wu-more { border-top: 1px solid var(--border); padding-top: 0.8rem; }
+.wu-more > * + * { margin-top: 0.8rem; }
+.wu-more[open] > summary { margin-bottom: 0.6rem; }
+.wu-extra > summary { padding: 0.9rem 1.1rem; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface); }
+.wu-extra[open] > summary { margin-bottom: 0.8rem; }
+.wu-providers { flex-wrap: wrap; }
+.wu-gmail-steps { margin: 0.4rem 0 0 1.1rem; padding: 0; font-size: 0.85rem; }
