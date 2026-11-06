@@ -1130,13 +1130,13 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
       </label>
       <label className="field">
         <span className="field-label">Your own subject lines <em className="mb-muted">(optional, one per line)</em></span>
-        <textarea className="input" rows={3} value={subjectsText} onChange={(e) => { setSubjectsText(e.target.value); setSamples(null); }}
-          placeholder={"Kitchen drawings for review\nSite visit on Friday"} />
+        <textarea className="input wu-own" rows={3} value={subjectsText} onChange={(e) => { setSubjectsText(e.target.value); setSamples(null); }}
+          placeholder={"e.g. Kitchen drawings for review\ne.g. Site visit on Friday"} />
       </label>
       <label className="field">
         <span className="field-label">Your own messages <em className="mb-muted">(optional, put a line with --- between messages)</em></span>
-        <textarea className="input" rows={5} value={messagesText} onChange={(e) => { setMessagesText(e.target.value); setSamples(null); }}
-          placeholder={"The 3D views for the client are ready. Can you check them before Friday?\n---\nI've updated the material list with the new tile prices."} />
+        <textarea className="input wu-own" rows={5} value={messagesText} onChange={(e) => { setMessagesText(e.target.value); setSamples(null); }}
+          placeholder={"e.g. The 3D views for the client are ready. Can you check them before Friday?\n---\ne.g. I've updated the material list with the new tile prices."} />
         <span className="field-hint">
           Write only the message: the greeting (Hi …,) and sign-off are added. Use {"{first_name}"} for the other person&apos;s name.
           {ownSubjects.length || ownMessages.length ? ` ${ownSubjects.length} subject${ownSubjects.length === 1 ? "" : "s"}, ${ownMessages.length} message${ownMessages.length === 1 ? "" : "s"}.` : ""}
