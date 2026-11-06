@@ -28,6 +28,9 @@ interface MailboxRow {
   warmup_settings: Advanced;
   sent_7d: number;
   received_7d: number;
+  failed_7d: number;
+  last_failure: { at: string; error: string } | null;
+  last_activity_at: string | null;
   warmup_day: number;
   target_today: number;
   sent_today: number;
@@ -51,6 +54,9 @@ interface Advanced {
   spam_protection: number;
   important_rate: number;
   read_emulation: boolean;
+  timezone: string | null;
+  window_start: number;
+  window_end: number;
 }
 
 interface Overview {
@@ -59,7 +65,10 @@ interface Overview {
   ramp: { until_day: number; per_day: number }[];
   max_mailboxes: number;
   defaults: { smtp_host: string; smtp_port: number; imap_host: string; imap_port: number };
-  summary: { mailboxes: number; active: number; sent_today: number; inbox_rate_7d: number | null; rescued_7d: number; inbox_7d: number; spam_7d: number };
+  summary: {
+    mailboxes: number; active: number; paused: number; failing: number; sent_today: number; sent_7d: number; received_7d: number;
+    inbox_rate_7d: number | null; spam_rate_7d: number | null; rescued_7d: number; inbox_7d: number; spam_7d: number; failed_7d: number;
+  };
   mailboxes: MailboxRow[];
 }
 
@@ -181,28 +190,43 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
   const full = data.mailboxes.length >= data.max_mailboxes;
   return (
     <div className="lab-stack">
-      <section className="stats" aria-label="Warm-up summary">
+      <section className="stats stats--5" aria-label="Warm-up summary">
         <div className="stat stat--feature">
-          <div className="stat-top">Mailboxes<span className="stat-icon"><Mail size={17} /></span></div>
+          <div className="stat-top">Email accounts<span className="stat-icon"><Mail size={17} /></span></div>
           <div className="stat-value">{s.active}<span className="stat-of"> of {s.mailboxes}</span></div>
-          <div className="stat-foot">Warming up now</div>
+          <div className="stat-foot">Warming up{s.paused ? ` · ${s.paused} paused` : ""}{s.failing ? ` · ${s.failing} can't connect` : ""}</div>
         </div>
         <div className="stat stat--info">
-          <div className="stat-top">Sent today<span className="stat-icon"><ArrowUpRight size={17} /></span></div>
-          <div className="stat-value">{s.sent_today}</div>
-          <div className="stat-foot">Between your mailboxes, {hour(data.window.start)}–{hour(data.window.end)}</div>
+          <div className="stat-top">Warm-up emails<span className="stat-icon"><ArrowUpRight size={17} /></span></div>
+          <div className="stat-value">{s.sent_today}<span className="stat-of"> today</span></div>
+          <div className="stat-foot">{s.sent_7d} sent · {s.received_7d} received, last 7 days</div>
         </div>
         <div className="stat stat--success">
-          <div className="stat-top">Landed in inbox<span className="stat-icon"><Inbox size={17} /></span></div>
+          <div className="stat-top">Inbox placement<span className="stat-icon"><Inbox size={17} /></span></div>
           <div className="stat-value">{pct(s.inbox_rate_7d)}</div>
-          <div className="stat-foot">{s.inbox_7d + s.spam_7d ? `${s.inbox_7d} of ${s.inbox_7d + s.spam_7d} emails, last 7 days` : "Shows once emails arrive"}</div>
+          <div className="stat-foot">{s.inbox_7d + s.spam_7d ? `${s.inbox_7d} of ${s.inbox_7d + s.spam_7d} landed in inbox, 7 days` : "Shows once emails arrive"}</div>
+        </div>
+        <div className="stat stat--danger">
+          <div className="stat-top">Spam placement<span className="stat-icon"><AlertCircle size={17} /></span></div>
+          <div className="stat-value">{pct(s.spam_rate_7d)}</div>
+          <div className="stat-foot">{s.inbox_7d + s.spam_7d ? `${s.spam_7d} landed in spam, 7 days` : "Shows once emails arrive"}</div>
         </div>
         <div className="stat stat--violet">
           <div className="stat-top">Saved from spam<span className="stat-icon"><ShieldCheck size={17} /></span></div>
           <div className="stat-value">{s.rescued_7d}</div>
-          <div className="stat-foot">Rescued from the spam folder, last 7 days</div>
+          <div className="stat-foot">Moved to the inbox, 7 days</div>
         </div>
       </section>
+
+      {s.failed_7d > 0 && (
+        <div className="alert alert-warning" role="status">
+          <AlertCircle size={18} />
+          <div>
+            <strong>{s.failed_7d} warm-up email{s.failed_7d === 1 ? "" : "s"} couldn&apos;t be sent in the last 7 days.</strong>{" "}
+            Open the mailbox to see the error. A wrong password or a full daily sending limit at the provider are the usual causes.
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-head">
@@ -268,11 +292,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
               <div
                 key={m.id}
                 className={`wu-row wu-acc${open === m.id ? " is-open" : ""}`}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open warm-up of ${m.email}`}
                 onClick={() => { setOpen(m.id); setTab("analytics"); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { setOpen(m.id); setTab("analytics"); } }}
               >
                 <input type="checkbox" aria-label={`Select ${m.email}`} checked={picked.includes(m.id)}
                   onClick={(e) => e.stopPropagation()}
@@ -280,8 +300,19 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                 <div className="mb-who">
                   <span className="mb-avatar" aria-hidden="true">{(m.display_name || m.email)[0].toUpperCase()}</span>
                   <div className="mb-who-text">
-                    <strong className="truncate">{m.email}</strong>
-                    <span className="truncate">{m.display_name || "—"} · Day {m.warmup_day}{m.ready ? " · Ready for campaigns" : ""}</span>
+                    <button type="button" className="wu-acc-open truncate" onClick={(e) => { e.stopPropagation(); setOpen(m.id); setTab("analytics"); }}>
+                      {m.email}
+                    </button>
+                    <span className="truncate">
+                      {m.display_name || "—"} · Day {m.warmup_day}
+                      {m.last_activity_at ? ` · Last activity ${formatDateTime(m.last_activity_at)}` : " · No activity yet"}
+                    </span>
+                    {(m.ready || m.failed_7d > 0) && (
+                      <span className="wu-acc-tags">
+                        {m.ready && <span className="pill tone-success">Ready for campaigns</span>}
+                        {m.failed_7d > 0 && <span className="pill tone-warning">{m.failed_7d} failed to send</span>}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div><strong>{m.sent_today} of {m.target_today}</strong></div>
@@ -629,6 +660,11 @@ function PasswordDialog({
 }
 
 
+/** Common timezones for the sending window; the server accepts any IANA name */
+const TIMEZONES = [
+  "Asia/Karachi", "Asia/Dubai", "Asia/Kolkata", "Asia/Riyadh", "Asia/Singapore", "Europe/London", "Europe/Berlin",
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Toronto", "Australia/Sydney", "UTC",
+];
 const weekday = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
 
 /** Side panel of one mailbox, like Instantly's: analytics for the past week, its settings, its latest emails */
@@ -656,7 +692,8 @@ function WarmupPanel({
 
   const started = new Date(`${m.warmup_started_on}T12:00:00`);
   const days = m.warmup_day - 1; // the server counts warm-up days in its own timezone
-  const week = m.series.slice(-7);
+  const [range, setRange] = useState<7 | 30>(7);
+  const week = m.series.slice(-range);
   const top = Math.max(1, ...week.map((d) => d.sent));
   const landed = m.inbox_7d + m.spam_7d;
   const tone = m.health === "healthy" ? "good" : m.health === "fair" ? "fair" : m.health === "poor" ? "poor" : "none";
@@ -670,6 +707,10 @@ function WarmupPanel({
             <div>
               <strong id="wu-drawer-title" className="truncate">{m.email}</strong>
               <span>Started on {started.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} | {days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`}</span>
+              <span>
+                Sends {hour(m.warmup_settings.window_start)}–{hour(m.warmup_settings.window_end)} {m.warmup_settings.timezone || "(server time)"}
+                {m.warmup_settings.slow_ramp ? "" : " · no slow ramp"}{m.warmup_weekdays_only ? " · weekdays only" : ""}
+              </span>
             </div>
           </div>
           <div className="wu-onoff">
@@ -708,17 +749,36 @@ function WarmupPanel({
               <div className="wu-tile"><span className="wu-tile-icon wu-violet"><ShieldCheck size={18} /></span><div><em>Saved from spam</em><strong>{m.rescued_7d}</strong></div></div>
               <div className="wu-tile"><span className="wu-tile-icon wu-red"><ArrowDownLeft size={18} /></span><div><em>Warm-up received</em><strong>{m.received_7d}</strong></div></div>
             </div>
-            <p className="field-hint">Summary for the past week. Today: {m.sent_today} of {m.target_today} sent, {m.scheduled_today} still to go (sent between 9 AM and 6 PM).</p>
+            <p className="field-hint">
+              Summary for the past week. Today: {m.sent_today} of {m.target_today} sent, {m.scheduled_today} still to go.
+              {m.last_activity_at ? ` Last activity ${formatDateTime(m.last_activity_at)}.` : ""}
+            </p>
+            {m.failed_7d > 0 && (
+              <div className="alert alert-warning" role="status">
+                <AlertCircle size={18} />
+                <div>
+                  <strong>{m.failed_7d} email{m.failed_7d === 1 ? "" : "s"} failed to send in the last 7 days.</strong>
+                  {m.last_failure && <> Latest ({formatDateTime(m.last_failure.at)}): <code className="wu-err">{m.last_failure.error.replace(/^\[try \d+\]\s*/, "")}</code></>}
+                </div>
+              </div>
+            )}
             <div className="card wu-chart-card">
-              <h3>Warm-up emails sent</h3>
-              <div className="wu-chart" role="img" aria-label="Warm-up emails sent per day, last 7 days">
+              <div className="wu-chart-head">
+                <h3>Warm-up emails sent</h3>
+                <div className="segmented" role="group" aria-label="Chart range">
+                  {([7, 30] as const).map((r) => (
+                    <button key={r} type="button" className={range === r ? "active" : ""} aria-pressed={range === r} onClick={() => setRange(r)}>{r} days</button>
+                  ))}
+                </div>
+              </div>
+              <div className={`wu-chart${range === 30 ? " wu-chart--30" : ""}`} role="img" aria-label={`Warm-up emails sent per day, last ${range} days`}>
                 {week.map((d) => (
                   <div key={d.date} className="wu-chart-col" title={`${d.date}: ${d.sent} sent, ${d.inbox} inbox, ${d.spam} spam`}>
                     <span className="wu-chart-num">{d.sent || ""}</span>
                     <div className="wu-chart-bar" style={{ height: `${(d.sent / top) * 100}%` }}>
                       <i className="wu-chart-spam" style={{ height: d.sent ? `${(d.spam / d.sent) * 100}%` : 0 }} />
                     </div>
-                    <span className="wu-chart-day">{weekday(d.date)}</span>
+                    <span className="wu-chart-day">{range === 7 ? weekday(d.date) : Number(d.date.slice(8))}</span>
                   </div>
                 ))}
               </div>
@@ -763,11 +823,13 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
   const [weekdays, setWeekdays] = useState(m.warmup_weekdays_only);
   const [adv, setAdv] = useState<Advanced>(m.warmup_settings);
   const set = <K extends keyof Advanced>(k: K, v: Advanced[K]) => setAdv((a) => ({ ...a, [k]: v }));
+  // "Server time" is sent as an empty timezone, which clears one chosen before
+  const toSave = (a: Advanced) => ({ ...a, timezone: a.timezone || "" });
 
   const inc = Number(increase), lim = Number(limit), rep = Number(reply);
   const pctOk = (v: number) => Number.isInteger(v) && v >= 0 && v <= 100;
   const valid = Number.isInteger(inc) && inc >= 1 && inc <= 10 && Number.isInteger(lim) && lim >= 2 && lim <= 50 && pctOk(rep)
-    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate);
+    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate) && adv.window_start < adv.window_end;
   const reach = valid ? Math.ceil((lim - 1) / inc) + 1 : 0;
   const percent = (k: "open_rate" | "spam_protection" | "important_rate") => (
     <input className="input wu-pct" type="number" min={0} max={100} value={adv[k]} onChange={(e) => set(k, Number(e.target.value))} aria-label={k} />
@@ -776,7 +838,7 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
   return (
     <form className="wu-drawer-body" onSubmit={(e) => {
       e.preventDefault();
-      if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: adv });
+      if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: toSave(adv) });
     }}>
       <h3 className="wu-sub-title">Warm-up settings</h3>
       <div className="wu-set-grid">
@@ -796,6 +858,28 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
           <span className="field-hint">Suggested: 30</span>
         </label>
       </div>
+      <div className="wu-set-grid">
+        <label className="field">
+          <span className="field-label">Send from</span>
+          <select className="input" value={adv.window_start} onChange={(e) => set("window_start", Number(e.target.value))}>
+            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hour(h)}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Until</span>
+          <select className="input" value={adv.window_end} onChange={(e) => set("window_end", Number(e.target.value))}>
+            {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => <option key={h} value={h}>{h === 24 ? "Midnight" : hour(h)}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Timezone</span>
+          <select className="input" value={adv.timezone || ""} onChange={(e) => set("timezone", e.target.value || null)}>
+            <option value="">Server time (default)</option>
+            {TIMEZONES.concat(adv.timezone && !TIMEZONES.includes(adv.timezone) ? [adv.timezone] : []).map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+          </select>
+        </label>
+      </div>
+      {adv.window_start >= adv.window_end && <p className="cell-error" role="alert">&quot;Send from&quot; must be before &quot;Until&quot;.</p>}
       <div className="wu-set-row">
         <div><strong>Slow ramp</strong><span>Start with 1 email and add the increase each day. Turn off only for mailboxes that are already warm.</span></div>
         <Toggle on={adv.slow_ramp} onChange={(v) => set("slow_ramp", v)} label="Slow ramp" />
