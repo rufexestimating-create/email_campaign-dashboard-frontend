@@ -61,6 +61,8 @@ interface Advanced {
   topic: string;
   custom_subjects: string[];
   custom_messages: string[];
+  min_gap_minutes: number;
+  reply_delay: "fast" | "normal" | "slow";
 }
 
 interface Overview {
@@ -923,7 +925,7 @@ function WarmupPanel({
                   ) : (
                     <li><Send size={15} /> Warm-up is off, so it isn&apos;t sending anything. Turn on the switch above to continue.</li>
                   )}
-                  <li><Inbox size={15} /> Your other mailboxes open its emails and answer some of them. It does the same with the emails it receives (it replies to about {m.warmup_reply_rate ?? 50}%).</li>
+                  <li><Inbox size={15} /> Your other mailboxes open its emails and answer some of them. It does the same with the emails it receives: it replies to about {m.warmup_reply_rate ?? 50}%, {m.warmup_settings.reply_delay === "fast" ? "5 to 30 minutes" : m.warmup_settings.reply_delay === "slow" ? "2 to 6 hours" : "10 minutes to 2 hours"} after they arrive.</li>
                   <li><ShieldCheck size={15} /> If one of its emails lands in spam, it is moved back to the inbox by itself.</li>
                   <li><CheckCircle2 size={15} /> {m.ready ? "It has warmed up long enough: you can use it for campaigns. Keep the warm-up on." : `In about ${Math.max(1, READY_DAY - m.warmup_day + 1)} days it will be ready for your campaigns. You don't need to do anything.`}</li>
                 </ul>
@@ -1045,6 +1047,10 @@ const SPEEDS = [
   { id: "normal", label: "Normal", hint: "Up to 20 a day.", increase: 2, limit: 20, reply: 30 },
   { id: "fast", label: "Fast", hint: "Only for mailboxes that already send email. Up to 40 a day.", increase: 4, limit: 40, reply: 30 },
 ];
+
+/** Timing choices: minimum gap between a mailbox's warm-up emails, and how soon it replies */
+const GAPS: [number, string][] = [[0, "No minimum (random)"], [10, "10 minutes"], [20, "20 minutes"], [30, "30 minutes"], [60, "1 hour"], [120, "2 hours"]];
+const REPLY_AFTER: ["fast" | "normal" | "slow", string][] = [["fast", "Quickly: 5 to 30 minutes"], ["normal", "Normal: 10 minutes to 2 hours"], ["slow", "Slowly: 2 to 6 hours"]];
 
 /** What warm-up emails can be about (same ids as the server's warmup_content.TOPICS) */
 const CONTENT_TOPICS = [
@@ -1206,6 +1212,22 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
             <option value="">Server time (default)</option>
             {TIMEZONES.concat(adv.timezone && !TIMEZONES.includes(adv.timezone) ? [adv.timezone] : []).map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
           </select>
+        </label>
+      </div>
+      <div className="wu-set-grid">
+        <label className="field">
+          <span className="field-label">Gap between its emails</span>
+          <select className="input" value={adv.min_gap_minutes ?? 0} onChange={(e) => set("min_gap_minutes", Number(e.target.value))}>
+            {GAPS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+          </select>
+          <span className="field-hint">At least this long between two warm-up emails it sends.</span>
+        </label>
+        <label className="field">
+          <span className="field-label">Reply after</span>
+          <select className="input" value={adv.reply_delay ?? "normal"} onChange={(e) => set("reply_delay", e.target.value as Advanced["reply_delay"])}>
+            {REPLY_AFTER.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+          </select>
+          <span className="field-hint">How soon it answers a warm-up email it receives (only within its sending hours).</span>
         </label>
       </div>
       {adv.window_start === adv.window_end && <p className="cell-error" role="alert">&quot;Send from&quot; and &quot;Until&quot; can&apos;t be the same hour.</p>}
