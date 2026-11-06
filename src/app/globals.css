@@ -2255,3 +2255,14 @@ select.input {
 }
 .file-note { display: flex; align-items: flex-start; gap: 0.35rem; font-size: 0.8rem; color: var(--success); margin-top: 0.4rem; }
 .file-note svg { flex: none; margin-top: 2px; }
+/* Warm-up table, Instantly style: on/off switch and a health score */
+.wu-switch { width: 42px; height: 24px; border-radius: 999px; border: 0; background: var(--border-strong, #cfc6b8); position: relative; cursor: pointer; transition: background 0.15s; padding: 0; display: block; }
+.wu-switch span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+.wu-switch.on { background: var(--success); }
+.wu-switch.on span { transform: translateX(18px); }
+.wu-switch:disabled { opacity: 0.6; cursor: wait; }
+.wu-switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wu-score { display: inline-block; font-weight: 700; font-size: 1.05rem; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--surface-2, #f2ede3); }
+.wu-score--healthy { color: var(--success); background: var(--success-soft); }
+.wu-score--fair { color: #9a6700; background: #fdf1d3; }
+.wu-score--poor, .wu-score--error { color: var(--danger); background: #fbe4e2; }

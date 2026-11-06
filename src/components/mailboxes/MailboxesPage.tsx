@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, ArrowDownLeft, Settings, ArrowUpRight, ChevronDown, Flame, Inbox, KeyRound, Mail, Pause, Play, Plus, RefreshCw, ShieldCheck, Trash2,
+  AlertCircle, ArrowDownLeft, Settings, ArrowUpRight, ChevronDown, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -148,14 +148,14 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           <div className="stat-foot">Between your mailboxes, {hour(data.window.start)}–{hour(data.window.end)}</div>
         </div>
         <div className="stat stat--success">
-          <div className="stat-top">Reached the inbox<span className="stat-icon"><Inbox size={17} /></span></div>
+          <div className="stat-top">Landed in inbox<span className="stat-icon"><Inbox size={17} /></span></div>
           <div className="stat-value">{pct(s.inbox_rate_7d)}</div>
           <div className="stat-foot">{s.inbox_7d + s.spam_7d ? `${s.inbox_7d} of ${s.inbox_7d + s.spam_7d} emails, last 7 days` : "Shows once emails arrive"}</div>
         </div>
         <div className="stat stat--violet">
-          <div className="stat-top">Taken out of spam<span className="stat-icon"><ShieldCheck size={17} /></span></div>
+          <div className="stat-top">Saved from spam<span className="stat-icon"><ShieldCheck size={17} /></span></div>
           <div className="stat-value">{s.rescued_7d}</div>
-          <div className="stat-foot">Moved to the inbox, last 7 days</div>
+          <div className="stat-foot">Rescued from the spam folder, last 7 days</div>
         </div>
       </section>
 
@@ -164,7 +164,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           <div>
             <h2 className="card-title"><Flame size={17} /> Your mailboxes</h2>
             <p className="card-sub">
-              They email each other a few times a day, open each other&apos;s mail, take it out of spam and reply. Each one starts at 3 emails a day and builds up over three weeks.
+              Warm-up is automatic: they email each other, open each other&apos;s mail, save it from spam and reply. Use the gear to set how fast each one builds up.
             </p>
           </div>
           <button className="btn btn-primary" onClick={() => setAdding(true)} disabled={full} title={full ? `You can add up to ${data.max_mailboxes} mailboxes` : undefined}>
@@ -196,10 +196,10 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                 <tr>
                   <th>Mailbox</th>
                   <th>Warm-up</th>
-                  <th>Today</th>
-                  <th>Reached inbox</th>
+                  <th>Warm-up emails (14 days)</th>
+                  <th>Health score</th>
                   <th>Last 14 days</th>
-                  <th>Status</th>
+                  <th>Warm-up on / off</th>
                   <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -224,37 +224,43 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                           <span className="mb-sub">{m.target_today} a day now</span>
                         </td>
                         <td>
-                          <strong>{m.sent_today}</strong> <span className="mb-muted">sent</span>
-                          <span className="mb-sub">{m.received_today} received · {m.scheduled_today} to go</span>
+                          <strong>{m.series.reduce((n, d) => n + d.sent, 0)}</strong> <span className="mb-muted">sent</span>
+                          <span className="mb-sub">{m.inbox_7d} in inbox · {m.rescued_7d} saved from spam</span>
+                          <span className="mb-sub">Today: {m.sent_today} sent · {m.received_today} received · {m.scheduled_today} to go</span>
                         </td>
                         <td>
-                          <strong>{pct(m.inbox_rate_7d)}</strong>
-                          <span className="mb-sub">
-                            {m.inbox_7d + m.spam_7d ? `${m.spam_7d} in spam` : "No results yet"}
-                            {m.rescued_7d ? ` · ${m.rescued_7d} rescued` : ""}
-                          </span>
+                          <span className={`wu-score wu-score--${m.health}`} title={h.hint}>{pct(m.inbox_rate_7d)}</span>
+                          <span className="mb-sub">{m.inbox_7d + m.spam_7d ? `${m.spam_7d} in spam` : "No results yet"}</span>
                         </td>
                         <td><Spark series={m.series} /></td>
                         <td>
-                          <span className={`pill ${h.tone}`} title={m.health === "error" ? m.last_error ?? "" : h.hint}>{h.label}</span>
-                          {m.ready && <span className="pill tone-success" style={{ marginLeft: 6 }} title="Healthy for 2+ weeks: it's ready to send your campaigns.">Ready for campaigns</span>}
-                          {m.status === "error" && m.last_error && <span className="mb-sub mb-error">{m.last_error}</span>}
+                          {m.status === "error" ? (
+                            <>
+                              <button className="btn btn-secondary btn-sm" onClick={() => setPasswordFor(m)}><KeyRound size={14} /> Fix login</button>
+                              {m.last_error && <span className="mb-sub mb-error">{m.last_error}</span>}
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={m.status === "active"}
+                                aria-label={`Warm-up for ${m.email}`}
+                                className={`wu-switch${m.status === "active" ? " on" : ""}`}
+                                disabled={busy === m.id}
+                                onClick={() => m.status === "active"
+                                  ? request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: "paused" }, `${m.email} paused. Its planned emails were cancelled.`)
+                                  : request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: "active" }, `${m.email} is warming up again.`)}
+                              >
+                                <span />
+                              </button>
+                              <span className="mb-sub">{busy === m.id ? "Checking…" : m.status === "active" ? "Warming up" : "Paused"}</span>
+                            </>
+                          )}
+                          {m.ready && <span className="pill tone-success" style={{ marginTop: 4 }} title="Healthy for 2+ weeks: it's ready to send your campaigns.">Ready for campaigns</span>}
                         </td>
                         <td>
                           <div className="mb-actions">
-                            {m.status === "error" ? (
-                              <button className="btn btn-secondary btn-sm" onClick={() => setPasswordFor(m)}><KeyRound size={14} /> Fix login</button>
-                            ) : m.status === "paused" ? (
-                              <button className="btn btn-secondary btn-sm" disabled={busy === m.id}
-                                onClick={() => request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: "active" }, `${m.email} is warming up again.`)}>
-                                <Play size={14} /> {busy === m.id ? "Checking…" : "Resume"}
-                              </button>
-                            ) : (
-                              <button className="btn btn-secondary btn-sm" disabled={busy === m.id}
-                                onClick={() => request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: "paused" }, `${m.email} paused. Its planned emails were cancelled.`)}>
-                                <Pause size={14} /> Pause
-                              </button>
-                            )}
                             <button className="icon-btn" aria-label={`Check the login of ${m.email}`} title="Check the login" disabled={busy === `test-${m.id}`}
                               onClick={() => request(`test-${m.id}`, `/mailboxes/${m.id}/test`, "POST", undefined, `${m.email} can log in to send and read.`)}>
                               <RefreshCw size={15} className={busy === `test-${m.id}` ? "spin" : ""} />
