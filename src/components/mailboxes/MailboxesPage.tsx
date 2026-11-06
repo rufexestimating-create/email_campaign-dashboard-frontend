@@ -549,6 +549,22 @@ function Activity({ mailboxId }: { mailboxId: string }) {
   const [rows, setRows] = useState<ActivityRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [sending, setSending] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const reload = useCallback(async () => {
+    const res = await callApi<ActivityRow[]>(`/mailboxes/${mailboxId}/activity`);
+    if (res.data) setRows(res.data);
+  }, [mailboxId]);
+  const sendNow = async (r: ActivityRow) => {
+    setSending(r.id);
+    const res = await callApi<{ subject: string }>(`/mailboxes/${mailboxId}/activity/${r.id}/send-now`, {});
+    setSending(null);
+    if (res.error) return setNote(res.error);
+    setNote(`"${r.subject}" is going out now. In about a minute it shows here as Inbox.`);
+    setTimeout(reload, 35_000);
+    setTimeout(reload, 75_000);
+    setTimeout(reload, 120_000);
+  };
 
   useEffect(() => {
     let live = true;
@@ -570,6 +586,7 @@ function Activity({ mailboxId }: { mailboxId: string }) {
   const shown = rows.slice(current * ACTIVITY_PAGE, (current + 1) * ACTIVITY_PAGE);
   return (
     <>
+    {note && <p className="field-hint wu-note" role="status">{note}</p>}
     <ul className="mb-activity">
       {shown.map((r) => (
         <li key={r.id}>
@@ -585,7 +602,10 @@ function Activity({ mailboxId }: { mailboxId: string }) {
           </div>
           <span className="mb-activity-state">
             {r.status === "scheduled" ? (
-              <span className="pill no-dot tone-neutral">Planned {formatDateTime(r.scheduled_at)}</span>
+              <span className="wu-planned">
+                <span className="pill no-dot tone-neutral">{sending === r.id ? "Sending…" : `Planned ${formatDateTime(r.scheduled_at)}`}</span>
+                <button type="button" className="btn btn-secondary btn-sm" disabled={sending === r.id} onClick={() => sendNow(r)}>Send now</button>
+              </span>
             ) : r.status === "failed" ? (
               <span className="pill no-dot tone-danger" title={r.error ?? ""}>Failed</span>
             ) : r.rescued ? (

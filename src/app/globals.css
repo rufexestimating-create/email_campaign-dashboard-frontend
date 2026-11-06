@@ -2424,3 +2424,5 @@ select.input {
 .wu-check > div:first-child { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1 1 220px; }
 .wu-check > div:first-child span { font-size: 0.8rem; color: var(--text-3); }
 .wu-check--stack { flex-direction: column; align-items: stretch; }
+.wu-planned { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+.wu-note { background: var(--info-soft); color: var(--text); padding: 0.5rem 0.7rem; border-radius: 8px; margin: 0 0 0.6rem; }
