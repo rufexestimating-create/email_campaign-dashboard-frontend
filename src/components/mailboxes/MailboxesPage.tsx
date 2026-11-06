@@ -983,7 +983,7 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
   const inc = Number(increase), lim = Number(limit), rep = Number(reply);
   const pctOk = (v: number) => Number.isInteger(v) && v >= 0 && v <= 100;
   const valid = Number.isInteger(inc) && inc >= 1 && inc <= 10 && Number.isInteger(lim) && lim >= 2 && lim <= 50 && pctOk(rep)
-    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate) && adv.window_start < adv.window_end && contentOk;
+    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate) && adv.window_start !== adv.window_end && contentOk;
   const reach = valid ? Math.ceil((lim - 1) / inc) + 1 : 0;
   const percent = (k: "open_rate" | "spam_protection" | "important_rate") => (
     <input className="input wu-pct" type="number" min={0} max={100} value={adv[k]} onChange={(e) => set(k, Number(e.target.value))} aria-label={k} />
@@ -1090,7 +1090,7 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
         <label className="field">
           <span className="field-label">Until</span>
           <select className="input" value={adv.window_end} onChange={(e) => set("window_end", Number(e.target.value))}>
-            {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => <option key={h} value={h}>{h === 24 ? "Midnight" : hour(h)}</option>)}
+            {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => <option key={h} value={h}>{h === 24 ? "Midnight" : `${hour(h)}${h <= adv.window_start ? " (next day)" : ""}`}</option>)}
           </select>
         </label>
         <label className="field">
@@ -1101,7 +1101,8 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
           </select>
         </label>
       </div>
-      {adv.window_start >= adv.window_end && <p className="cell-error" role="alert">&quot;Send from&quot; must be before &quot;Until&quot;.</p>}
+      {adv.window_start === adv.window_end && <p className="cell-error" role="alert">&quot;Send from&quot; and &quot;Until&quot; can&apos;t be the same hour.</p>}
+      {adv.window_start > adv.window_end && <p className="field-hint">Runs overnight: from {hour(adv.window_start)} until {hour(adv.window_end)} the next morning.</p>}
       <div className="wu-set-row">
         <div><strong>Slow ramp</strong><span>Start with 1 email and add the increase each day. Turn off only for mailboxes that are already warm.</span></div>
         <Toggle on={adv.slow_ramp} onChange={(v) => set("slow_ramp", v)} label="Slow ramp" />
