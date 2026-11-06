@@ -394,6 +394,14 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
             status === "paused" ? `${openRow.email} paused. Its planned emails were cancelled.` : `${openRow.email} is warming up again.`)}
           onFixLogin={() => setPasswordFor(openRow)}
           onSave={(body) => request("settings", `/mailboxes/${openRow.id}`, "PATCH", body, `Warm-up settings of ${openRow.email} saved.`)}
+          onSendTest={async () => {
+            const sent = await request("sendtest", `/mailboxes/${openRow.id}/send-test`, "POST");
+            if (!sent) return;
+            notify(`Test email "${sent.subject}" is going to ${sent.to}. Within about 2 minutes it shows here as Inbox or Spam.`);
+            // it goes out within 30 s and the other inbox is read about a minute later
+            setTimeout(load, 70_000);
+            setTimeout(load, 130_000);
+          }}
           onTest={() => request(`test-${openRow.id}`, `/mailboxes/${openRow.id}/test`, "POST", undefined, `${openRow.email} can log in to send and read.`)}
           onRemove={() => confirm({
             title: `Remove ${openRow.email}?`,
@@ -670,7 +678,7 @@ const weekday = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(
 
 /** Side panel of one mailbox, like Instantly's: analytics for the past week, its settings, its latest emails */
 function WarmupPanel({
-  mailbox: m, tab, setTab, busy, onClose, onStatus, onFixLogin, onSave, onTest, onRemove,
+  mailbox: m, tab, setTab, busy, onClose, onStatus, onFixLogin, onSave, onSendTest, onTest, onRemove,
 }: {
   mailbox: MailboxRow;
   tab: "analytics" | "settings" | "emails";
@@ -680,6 +688,7 @@ function WarmupPanel({
   onStatus: (status: "active" | "paused") => void;
   onFixLogin: () => void;
   onSave: (body: object) => Promise<unknown>;
+  onSendTest: () => void;
   onTest: () => void;
   onRemove: () => void;
 }) {
@@ -738,6 +747,16 @@ function WarmupPanel({
         {tab === "analytics" && (
           <div className="wu-drawer-body">
             {m.status === "error" && m.last_error && <div className="alert alert-danger"><AlertCircle size={18} /><div>{m.last_error}</div></div>}
+            <div className="wu-test">
+              <div>
+                <strong>Try it now</strong>
+                <span>Send one warm-up email straight away, at any time of day, and see where it lands.</span>
+              </div>
+              <button className="btn btn-primary btn-sm" disabled={busy === "sendtest" || m.status !== "active"} onClick={onSendTest}
+                title={m.status !== "active" ? "Turn the warm-up on first" : undefined}>
+                <Send size={14} /> {busy === "sendtest" ? "Sending…" : "Send a test email now"}
+              </button>
+            </div>
             <div className={`wu-banner wu-banner--${tone}`}>
               <Smile size={34} />
               <span>

@@ -2339,3 +2339,6 @@ select.input {
 .wu-err { font-size: 0.8rem; word-break: break-word; }
 /* Dark theme: the bright tones need dark text on top (keeps the >= 4.5:1 contrast) */
 :root[data-theme="dark"] .wu-banner, :root[data-theme="dark"] .wu-tile-icon, :root[data-theme="dark"] .btn-success.is-on { color: #151413; }
+.wu-test { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border: 1px dashed var(--primary); border-radius: 12px; background: var(--primary-soft); flex-wrap: wrap; }
+.wu-test div { display: flex; flex-direction: column; gap: 0.1rem; }
+.wu-test span { font-size: 0.8rem; color: var(--text-2); }
