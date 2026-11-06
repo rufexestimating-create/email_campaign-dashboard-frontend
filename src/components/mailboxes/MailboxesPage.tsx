@@ -58,6 +58,9 @@ interface Advanced {
   timezone: string | null;
   window_start: number;
   window_end: number;
+  topic: string;
+  custom_subjects: string[];
+  custom_messages: string[];
 }
 
 interface Overview {
@@ -393,7 +396,19 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           onStatus={(status) => request(openRow.id, `/mailboxes/${openRow.id}`, "PATCH", { status },
             status === "paused" ? `${openRow.email} paused. Its planned emails were cancelled.` : `${openRow.email} is warming up again.`)}
           onFixLogin={() => setPasswordFor(openRow)}
-          onSave={(body) => request("settings", `/mailboxes/${openRow.id}`, "PATCH", body, `Warm-up settings of ${openRow.email} saved.`)}
+          onSave={async (body, applyAll) => {
+            const saved = await request("settings", `/mailboxes/${openRow.id}`, "PATCH", body, applyAll ? undefined : `Warm-up settings of ${openRow.email} saved.`);
+            if (!saved || !applyAll) return saved;
+            const adv = (body as { warmup_settings: Advanced }).warmup_settings;
+            const content = { topic: adv.topic, custom_subjects: adv.custom_subjects, custom_messages: adv.custom_messages };
+            const others = data.mailboxes.filter((m) => m.id !== openRow.id);
+            const results = await Promise.all(others.map((m) =>
+              apiFetch(`/mailboxes/${m.id}`, { method: "PATCH", body: JSON.stringify({ warmup_settings: content }) }).then((r) => r.ok).catch(() => false)));
+            const failed = results.filter((ok) => !ok).length;
+            notify(failed ? `Saved, but ${failed} other mailbox${failed === 1 ? "" : "es"} couldn't be updated.` : `Saved. All ${others.length + 1} mailboxes now use this email content.`, failed > 0);
+            await load();
+            return saved;
+          }}
           onSendTest={async () => {
             const sent = await request("sendtest", `/mailboxes/${openRow.id}/send-test`, "POST");
             if (!sent) return;
@@ -687,7 +702,7 @@ function WarmupPanel({
   onClose: () => void;
   onStatus: (status: "active" | "paused") => void;
   onFixLogin: () => void;
-  onSave: (body: object) => Promise<unknown>;
+  onSave: (body: object, applyAll?: boolean) => Promise<unknown>;
   onSendTest: () => void;
   onTest: () => void;
   onRemove: () => void;
@@ -836,20 +851,49 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 }
 
 /** Instantly's warm-up settings: basic (ramp, limit, reply rate) and advanced (human-like behaviour) */
-function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; saving: boolean; onSave: (body: object) => Promise<unknown> }) {
+/** What warm-up emails can be about (same ids as the server's warmup_content.TOPICS) */
+const CONTENT_TOPICS = [
+  { id: "architecture", label: "Architecture & design" },
+  { id: "general", label: "General business / office" },
+  { id: "construction", label: "Construction & contracting" },
+  { id: "real_estate", label: "Real estate" },
+  { id: "marketing", label: "Marketing agency" },
+  { id: "software", label: "Software / IT" },
+  { id: "finance", label: "Accounting / finance" },
+  { id: "custom", label: "Only my own subjects and messages" },
+];
+const MESSAGE_SEPARATOR = "---";
+
+function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; saving: boolean; onSave: (body: object, applyAll?: boolean) => Promise<unknown> }) {
   const [increase, setIncrease] = useState(String(m.warmup_increase ?? 1));
   const [limit, setLimit] = useState(String(m.daily_limit));
   const [reply, setReply] = useState(String(m.warmup_reply_rate ?? 30));
   const [weekdays, setWeekdays] = useState(m.warmup_weekdays_only);
   const [adv, setAdv] = useState<Advanced>(m.warmup_settings);
+  const [subjectsText, setSubjectsText] = useState((m.warmup_settings.custom_subjects ?? []).join("\n"));
+  const [messagesText, setMessagesText] = useState((m.warmup_settings.custom_messages ?? []).join(`\n${MESSAGE_SEPARATOR}\n`));
+  const [applyAll, setApplyAll] = useState(false);
+  const [samples, setSamples] = useState<{ subject: string; body: string }[] | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const ownSubjects = subjectsText.split("\n").map((x) => x.trim()).filter(Boolean);
+  const ownMessages = messagesText.split(new RegExp(`^\\s*${MESSAGE_SEPARATOR}\\s*$`, "m")).map((x) => x.trim()).filter(Boolean);
+  const contentOk = ownSubjects.length <= 50 && ownSubjects.every((x) => x.length <= 150) && ownMessages.length <= 30 && ownMessages.every((x) => x.length <= 2000)
+    && (adv.topic !== "custom" || ownSubjects.length > 0 || ownMessages.length > 0);
+  const preview = async () => {
+    setPreviewing(true);
+    const res = await callApi<{ subject: string; body: string }[]>("/mailboxes/content-preview",
+      { mailbox_id: m.id, topic: adv.topic, custom_subjects: ownSubjects, custom_messages: ownMessages });
+    setSamples(res.data ?? []);
+    setPreviewing(false);
+  };
   const set = <K extends keyof Advanced>(k: K, v: Advanced[K]) => setAdv((a) => ({ ...a, [k]: v }));
   // "Server time" is sent as an empty timezone, which clears one chosen before
-  const toSave = (a: Advanced) => ({ ...a, timezone: a.timezone || "" });
+  const toSave = (a: Advanced) => ({ ...a, timezone: a.timezone || "", custom_subjects: ownSubjects, custom_messages: ownMessages });
 
   const inc = Number(increase), lim = Number(limit), rep = Number(reply);
   const pctOk = (v: number) => Number.isInteger(v) && v >= 0 && v <= 100;
   const valid = Number.isInteger(inc) && inc >= 1 && inc <= 10 && Number.isInteger(lim) && lim >= 2 && lim <= 50 && pctOk(rep)
-    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate) && adv.window_start < adv.window_end;
+    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate) && adv.window_start < adv.window_end && contentOk;
   const reach = valid ? Math.ceil((lim - 1) / inc) + 1 : 0;
   const percent = (k: "open_rate" | "spam_protection" | "important_rate") => (
     <input className="input wu-pct" type="number" min={0} max={100} value={adv[k]} onChange={(e) => set(k, Number(e.target.value))} aria-label={k} />
@@ -858,7 +902,7 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
   return (
     <form className="wu-drawer-body" onSubmit={(e) => {
       e.preventDefault();
-      if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: toSave(adv) });
+      if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: toSave(adv) }, applyAll);
     }}>
       <h3 className="wu-sub-title">Warm-up settings</h3>
       <div className="wu-set-grid">
@@ -908,6 +952,55 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
         <div><strong>Weekdays only</strong><span>No warm-up emails on Saturday and Sunday. It still receives and answers on weekends.</span></div>
         <Toggle on={weekdays} onChange={setWeekdays} label="Weekdays only" />
       </div>
+
+      <h3 className="wu-sub-title">Warm-up email content</h3>
+      <p className="field-hint" style={{ marginTop: "-0.3rem" }}>
+        What the warm-up emails talk about. Every email is put together on its own from the topic and your lines, with a greeting and sign-off, so no two are the same.
+      </p>
+      <label className="field">
+        <span className="field-label">Topic</span>
+        <select className="input" value={adv.topic || "architecture"} onChange={(e) => { set("topic", e.target.value); setSamples(null); }}>
+          {CONTENT_TOPICS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        <span className="field-hint">Pick the one closest to your business, so the warm-up reads like your real mail.</span>
+      </label>
+      <label className="field">
+        <span className="field-label">Your own subject lines <em className="mb-muted">(optional, one per line)</em></span>
+        <textarea className="input" rows={3} value={subjectsText} onChange={(e) => { setSubjectsText(e.target.value); setSamples(null); }}
+          placeholder={"Kitchen drawings for review\nSite visit on Friday"} />
+      </label>
+      <label className="field">
+        <span className="field-label">Your own messages <em className="mb-muted">(optional, put a line with --- between messages)</em></span>
+        <textarea className="input" rows={5} value={messagesText} onChange={(e) => { setMessagesText(e.target.value); setSamples(null); }}
+          placeholder={"The 3D views for the client are ready. Can you check them before Friday?\n---\nI've updated the material list with the new tile prices."} />
+        <span className="field-hint">
+          Write only the message: the greeting (Hi …,) and sign-off are added. Use {"{first_name}"} for the other person&apos;s name.
+          {ownSubjects.length || ownMessages.length ? ` ${ownSubjects.length} subject${ownSubjects.length === 1 ? "" : "s"}, ${ownMessages.length} message${ownMessages.length === 1 ? "" : "s"}.` : ""}
+          {adv.topic !== "custom" && (ownSubjects.length || ownMessages.length) ? " About 6 in 10 emails use your lines, the rest come from the topic." : ""}
+        </span>
+      </label>
+      {adv.topic === "custom" && !ownSubjects.length && !ownMessages.length && (
+        <p className="cell-error" role="alert">Add at least one subject or message, or pick a topic.</p>
+      )}
+      <div className="wu-preview-bar">
+        <button type="button" className="btn btn-secondary btn-sm" disabled={previewing || !contentOk} onClick={preview}>
+          {previewing ? "Writing samples…" : samples ? "Show 3 more samples" : "Preview 3 sample emails"}
+        </button>
+        <label className="chat-pick-row">
+          <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
+          <span>Use this email content for all my mailboxes</span>
+        </label>
+      </div>
+      {samples && (
+        <div className="wu-samples">
+          {samples.map((x, i) => (
+            <div key={i} className="wu-sample">
+              <strong>{x.subject}</strong>
+              <pre>{x.body}</pre>
+            </div>
+          ))}
+        </div>
+      )}
 
       <h3 className="wu-sub-title">Advanced warm-up settings</h3>
       <p className="field-hint" style={{ marginTop: "-0.3rem" }}>Make the warm-up behave more like a person.</p>

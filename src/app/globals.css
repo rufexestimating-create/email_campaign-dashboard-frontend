@@ -2342,3 +2342,8 @@ select.input {
 .wu-test { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border: 1px dashed var(--primary); border-radius: 12px; background: var(--primary-soft); flex-wrap: wrap; }
 .wu-test div { display: flex; flex-direction: column; gap: 0.1rem; }
 .wu-test span { font-size: 0.8rem; color: var(--text-2); }
+.wu-preview-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; }
+.wu-samples { display: flex; flex-direction: column; gap: 0.6rem; }
+.wu-sample { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; background: var(--surface); }
+.wu-sample strong { display: block; margin-bottom: 0.35rem; }
+.wu-sample pre { white-space: pre-wrap; font-family: inherit; font-size: 0.86rem; color: var(--text-2); margin: 0; }
