@@ -23,6 +23,8 @@ interface MailboxRow {
   daily_limit: number;
   warmup_increase: number | null;
   warmup_reply_rate: number | null;
+  warmup_weekdays_only: boolean;
+  received_7d: number;
   warmup_day: number;
   target_today: number;
   sent_today: number;
@@ -85,6 +87,8 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
   const [passwordFor, setPasswordFor] = useState<MailboxRow | null>(null);
   const [settingsFor, setSettingsFor] = useState<MailboxRow | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused" | "error">("all");
 
   const load = useCallback(async () => {
     const res = await callApi<Overview>("/mailboxes");
@@ -130,6 +134,35 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
     );
   }
   if (!data) return <div className="card empty"><div className="loader" /></div>;
+
+  const shown = data.mailboxes.filter((m) => statusFilter === "all" || m.status === statusFilter);
+  const picked = selected.filter((id) => data.mailboxes.some((m) => m.id === id));
+  const allShown = shown.length > 0 && shown.every((m) => picked.includes(m.id));
+
+  /** Bulk enable / pause: one mailbox after another, so a wrong login on one doesn't stop the others */
+  const bulk = async (status: "active" | "paused") => {
+    setBusy("bulk");
+    let done = 0;
+    const failed: string[] = [];
+    for (const id of picked) {
+      const mb = data.mailboxes.find((m) => m.id === id);
+      if (!mb || mb.status === "error" || mb.status === status) continue;
+      try {
+        const res = await apiFetch(`/mailboxes/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+        if (res.ok) done += 1;
+        else failed.push(mb.email);
+      } catch {
+        failed.push(mb.email);
+      }
+    }
+    setBusy(null);
+    setSelected([]);
+    notify(
+      failed.length ? `${done} updated. Couldn't change: ${failed.join(", ")}.` : done ? `Warm-up ${status === "active" ? "enabled" : "paused"} for ${done} mailbox${done === 1 ? "" : "es"}.` : "Nothing to change for the selected mailboxes.",
+      failed.length > 0,
+    );
+    await load();
+  };
 
   const s = data.summary;
   const full = data.mailboxes.length >= data.max_mailboxes;
@@ -189,10 +222,34 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
             <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}><Plus size={15} /> Add your first mailbox</button>
           </div>
         ) : (
+          <>
+          <div className="wu-toolbar">
+            <label className="wu-filter">
+              <span className="sr-only">Filter by warm-up status</span>
+              <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}>
+                <option value="all">All statuses</option>
+                <option value="active">Warming up</option>
+                <option value="paused">Paused</option>
+                <option value="error">Can&apos;t connect</option>
+              </select>
+            </label>
+            {picked.length > 0 && (
+              <div className="wu-bulk">
+                <strong>{picked.length} selected</strong>
+                <button className="btn btn-secondary btn-sm" disabled={busy === "bulk"} onClick={() => bulk("active")}>Bulk enable warm-up</button>
+                <button className="btn btn-secondary btn-sm" disabled={busy === "bulk"} onClick={() => bulk("paused")}>Bulk pause warm-up</button>
+                <button className="link-btn" onClick={() => setSelected([])}>Clear</button>
+              </div>
+            )}
+          </div>
           <div className="table-wrap">
             <table className="table mb-table">
               <thead>
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" aria-label="Select all mailboxes" checked={allShown}
+                      onChange={() => setSelected(allShown ? [] : shown.map((m) => m.id))} />
+                  </th>
                   <th>Mailbox</th>
                   <th>Warm-up</th>
                   <th>Warm-up emails (14 days)</th>
@@ -203,12 +260,16 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                 </tr>
               </thead>
               <tbody>
-                {data.mailboxes.map((m) => {
+                {shown.map((m) => {
                   const h = HEALTH[m.health];
                   const isOpen = open === m.id;
                   return (
                     <React.Fragment key={m.id}>
                       <tr className={isOpen ? "is-open" : ""}>
+                        <td>
+                          <input type="checkbox" aria-label={`Select ${m.email}`} checked={picked.includes(m.id)}
+                            onChange={() => setSelected((sel) => (sel.includes(m.id) ? sel.filter((x) => x !== m.id) : [...sel, m.id]))} />
+                        </td>
                         <td>
                           <div className="mb-who">
                             <span className="mb-avatar" aria-hidden="true">{(m.display_name || m.email)[0].toUpperCase()}</span>
@@ -224,7 +285,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                         </td>
                         <td>
                           <strong>{m.series.reduce((n, d) => n + d.sent, 0)}</strong> <span className="mb-muted">sent</span>
-                          <span className="mb-sub">{m.inbox_7d} in inbox · {m.rescued_7d} saved from spam</span>
+                          <span className="mb-sub">{m.received_7d} received · {m.inbox_7d} in inbox · {m.rescued_7d} saved from spam (7 days)</span>
                           <span className="mb-sub">Today: {m.sent_today} sent · {m.received_today} received · {m.scheduled_today} to go</span>
                         </td>
                         <td>
@@ -286,7 +347,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                       </tr>
                       {isOpen && (
                         <tr className="mb-detail">
-                          <td colSpan={7}><DomainCheck mailboxId={m.id} /><Activity mailboxId={m.id} /></td>
+                          <td colSpan={8}><DomainCheck mailboxId={m.id} /><Activity mailboxId={m.id} /></td>
                         </tr>
                       )}
                     </React.Fragment>
@@ -295,6 +356,8 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
               </tbody>
             </table>
           </div>
+          {shown.length === 0 && <p className="field-hint" style={{ padding: "0.8rem" }}>No mailboxes with this status.</p>}
+          </>
         )}
       </div>
 
@@ -629,13 +692,14 @@ function SettingsDialog({
 }: {
   mailbox: MailboxRow;
   onClose: () => void;
-  onSave: (body: { warmup_increase: number; daily_limit: number; warmup_reply_rate: number }) => void;
+  onSave: (body: { warmup_increase: number; daily_limit: number; warmup_reply_rate: number; warmup_weekdays_only: boolean }) => void;
   saving: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [increase, setIncrease] = useState(String(mailbox.warmup_increase ?? 1));
   const [limit, setLimit] = useState(String(mailbox.daily_limit));
   const [reply, setReply] = useState(String(mailbox.warmup_reply_rate ?? 30));
+  const [weekdays, setWeekdays] = useState(mailbox.warmup_weekdays_only);
   useDialogFocus(ref, true);
 
   useEffect(() => {
@@ -655,7 +719,7 @@ function SettingsDialog({
           {mailbox.warmup_increase ? "" : "Right now this mailbox uses the standard ramp (3, 6, 12, then 20 a day). "}
           Saving these switches it to a gradual ramp: 1 email on day 1, then a few more each day.
         </p>
-        <form onSubmit={(e) => { e.preventDefault(); if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep }); }}>
+        <form onSubmit={(e) => { e.preventDefault(); if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays }); }}>
           <label className="field">
             <span className="field-label">Increase per day</span>
             <input className="input" type="number" min={1} max={10} required value={increase} onChange={(e) => setIncrease(e.target.value)} />
@@ -670,6 +734,10 @@ function SettingsDialog({
             <span className="field-label">Reply rate (%)</span>
             <input className="input" type="number" min={0} max={100} required value={reply} onChange={(e) => setReply(e.target.value)} />
             <span className="field-hint">Share of the warm-up emails it receives that it answers (0 to 100). Instantly suggests 30.</span>
+          </label>
+          <label className="chat-pick-row" style={{ margin: "0.4rem 0 0.8rem" }}>
+            <input type="checkbox" checked={weekdays} onChange={(e) => setWeekdays(e.target.checked)} />
+            <span><strong>Weekdays only</strong> <span className="mb-muted">(no warm-up emails on Saturday and Sunday)</span></span>
           </label>
           <div className="dialog-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>

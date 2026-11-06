@@ -2266,3 +2266,6 @@ select.input {
 .wu-score--healthy { color: var(--success); background: var(--success-soft); }
 .wu-score--fair { color: #9a6700; background: #fdf1d3; }
 .wu-score--poor, .wu-score--error { color: var(--danger); background: #fbe4e2; }
+.wu-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+.wu-filter select { min-width: 170px; padding-block: 0.4rem; }
+.wu-bulk { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
