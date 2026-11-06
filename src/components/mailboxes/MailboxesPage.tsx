@@ -1214,6 +1214,8 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
           </select>
         </label>
       </div>
+      {adv.window_start === adv.window_end && <p className="cell-error" role="alert">&quot;Send from&quot; and &quot;Until&quot; can&apos;t be the same hour.</p>}
+      {adv.window_start > adv.window_end && <p className="field-hint">Runs overnight: from {hour(adv.window_start)} until {hour(adv.window_end)} the next morning.</p>}
       <div className="wu-set-grid">
         <label className="field">
           <span className="field-label">Gap between its emails</span>
@@ -1230,8 +1232,6 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
           <span className="field-hint">How soon it answers a warm-up email it receives (only within its sending hours).</span>
         </label>
       </div>
-      {adv.window_start === adv.window_end && <p className="cell-error" role="alert">&quot;Send from&quot; and &quot;Until&quot; can&apos;t be the same hour.</p>}
-      {adv.window_start > adv.window_end && <p className="field-hint">Runs overnight: from {hour(adv.window_start)} until {hour(adv.window_end)} the next morning.</p>}
       <div className="wu-set-row">
         <div><strong>Slow ramp</strong><span>Start with 1 email and add the increase each day. Turn off only for mailboxes that are already warm.</span></div>
         <Toggle on={adv.slow_ramp} onChange={(v) => set("slow_ramp", v)} label="Slow ramp" />
