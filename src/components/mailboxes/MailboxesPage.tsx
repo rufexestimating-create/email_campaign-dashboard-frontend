@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, ArrowDownLeft, Settings, ArrowUpRight, ChevronDown, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
+  AlertCircle, ArrowDownLeft, Send, Smile, X, ArrowUpRight, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -24,6 +24,9 @@ interface MailboxRow {
   warmup_increase: number | null;
   warmup_reply_rate: number | null;
   warmup_weekdays_only: boolean;
+  warmup_started_on: string;
+  warmup_settings: Advanced;
+  sent_7d: number;
   received_7d: number;
   warmup_day: number;
   target_today: number;
@@ -39,6 +42,15 @@ interface MailboxRow {
   health: Health;
   ready: boolean;
   series: { date: string; sent: number; inbox: number; spam: number }[];
+}
+
+interface Advanced {
+  slow_ramp: boolean;
+  random_daily: boolean;
+  open_rate: number;
+  spam_protection: number;
+  important_rate: number;
+  read_emulation: boolean;
 }
 
 interface Overview {
@@ -85,7 +97,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [passwordFor, setPasswordFor] = useState<MailboxRow | null>(null);
-  const [settingsFor, setSettingsFor] = useState<MailboxRow | null>(null);
+  const [tab, setTab] = useState<"analytics" | "settings" | "emails">("analytics");
   const [open, setOpen] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused" | "error">("all");
@@ -164,6 +176,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
     await load();
   };
 
+  const openRow = data.mailboxes.find((m) => m.id === open) ?? null;
   const s = data.summary;
   const full = data.mailboxes.length >= data.max_mailboxes;
   return (
@@ -196,7 +209,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           <div>
             <h2 className="card-title"><Flame size={17} /> Your mailboxes</h2>
             <p className="card-sub">
-              Warm-up is automatic: they email each other, open each other&apos;s mail, save it from spam and reply. Use the gear to set how fast each one builds up.
+              Warm-up is automatic: they email each other, open each other&apos;s mail, save it from spam and reply. Click a mailbox to see its warm-up analytics and settings. The flame turns its warm-up on or off.
             </p>
           </div>
           <button className="btn btn-primary" onClick={() => setAdding(true)} disabled={full} title={full ? `You can add up to ${data.max_mailboxes} mailboxes` : undefined}>
@@ -242,119 +255,56 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
               </div>
             )}
           </div>
-          <div className="table-wrap">
-            <table className="table mb-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 32 }}>
-                    <input type="checkbox" aria-label="Select all mailboxes" checked={allShown}
-                      onChange={() => setSelected(allShown ? [] : shown.map((m) => m.id))} />
-                  </th>
-                  <th>Mailbox</th>
-                  <th>Warm-up</th>
-                  <th>Warm-up emails (14 days)</th>
-                  <th>Health score</th>
-                  <th>Last 14 days</th>
-                  <th>Warm-up on / off</th>
-                  <th><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((m) => {
-                  const h = HEALTH[m.health];
-                  const isOpen = open === m.id;
-                  return (
-                    <React.Fragment key={m.id}>
-                      <tr className={isOpen ? "is-open" : ""}>
-                        <td>
-                          <input type="checkbox" aria-label={`Select ${m.email}`} checked={picked.includes(m.id)}
-                            onChange={() => setSelected((sel) => (sel.includes(m.id) ? sel.filter((x) => x !== m.id) : [...sel, m.id]))} />
-                        </td>
-                        <td>
-                          <div className="mb-who">
-                            <span className="mb-avatar" aria-hidden="true">{(m.display_name || m.email)[0].toUpperCase()}</span>
-                            <div className="mb-who-text">
-                              <strong className="truncate">{m.display_name || m.email.split("@")[0]}</strong>
-                              <span className="truncate">{m.email}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <strong>Day {m.warmup_day}</strong>
-                          <span className="mb-sub">{m.target_today} a day now</span>
-                        </td>
-                        <td>
-                          <strong>{m.series.reduce((n, d) => n + d.sent, 0)}</strong> <span className="mb-muted">sent</span>
-                          <span className="mb-sub">{m.received_7d} received · {m.inbox_7d} in inbox · {m.rescued_7d} saved from spam (7 days)</span>
-                          <span className="mb-sub">Today: {m.sent_today} sent · {m.received_today} received · {m.scheduled_today} to go</span>
-                        </td>
-                        <td>
-                          <span className={`wu-score wu-score--${m.health}`} title={h.hint}>{pct(m.inbox_rate_7d)}</span>
-                          <span className="mb-sub">{m.inbox_7d + m.spam_7d ? `${m.spam_7d} in spam` : "No results yet"}</span>
-                        </td>
-                        <td><Spark series={m.series} /></td>
-                        <td>
-                          {m.status === "error" ? (
-                            <>
-                              <button className="btn btn-secondary btn-sm" onClick={() => setPasswordFor(m)}><KeyRound size={14} /> Fix login</button>
-                              {m.last_error && <span className="mb-sub mb-error">{m.last_error}</span>}
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={m.status === "active"}
-                                aria-label={`Warm-up for ${m.email}`}
-                                className={`wu-switch${m.status === "active" ? " on" : ""}`}
-                                disabled={busy === m.id}
-                                onClick={() => m.status === "active"
-                                  ? request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: "paused" }, `${m.email} paused. Its planned emails were cancelled.`)
-                                  : request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: "active" }, `${m.email} is warming up again.`)}
-                              >
-                                <span />
-                              </button>
-                              <span className="mb-sub">{busy === m.id ? "Checking…" : m.status === "active" ? "Warming up" : "Paused"}</span>
-                            </>
-                          )}
-                          {m.ready && <span className="pill tone-success" style={{ marginTop: 4 }} title="Healthy for 2+ weeks: it's ready to send your campaigns.">Ready for campaigns</span>}
-                        </td>
-                        <td>
-                          <div className="mb-actions">
-                            <button className="icon-btn" aria-label={`Check the login of ${m.email}`} title="Check the login" disabled={busy === `test-${m.id}`}
-                              onClick={() => request(`test-${m.id}`, `/mailboxes/${m.id}/test`, "POST", undefined, `${m.email} can log in to send and read.`)}>
-                              <RefreshCw size={15} className={busy === `test-${m.id}` ? "spin" : ""} />
-                            </button>
-                            <button className="icon-btn" aria-label={`Warm-up settings of ${m.email}`} title="Warm-up settings" onClick={() => setSettingsFor(m)}>
-                              <Settings size={15} />
-                            </button>
-                            <button className="icon-btn danger" aria-label={`Remove ${m.email}`} title="Remove"
-                              onClick={() => confirm({
-                                title: `Remove ${m.email}?`,
-                                message: "Its warm-up stops and its history is deleted. The mailbox itself and its emails are not touched.",
-                                confirmLabel: "Remove mailbox",
-                                danger: true,
-                                onConfirm: () => request(`del-${m.id}`, `/mailboxes/${m.id}`, "DELETE", undefined, `${m.email} removed.`),
-                              })}>
-                              <Trash2 size={15} />
-                            </button>
-                            <button className="icon-btn" aria-expanded={isOpen} aria-label={`Latest emails of ${m.email}`} title="Latest emails"
-                              onClick={() => setOpen(isOpen ? null : m.id)}>
-                              <ChevronDown size={16} className={isOpen ? "rot-180" : ""} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isOpen && (
-                        <tr className="mb-detail">
-                          <td colSpan={8}><DomainCheck mailboxId={m.id} /><Activity mailboxId={m.id} /></td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="wu-list">
+            <div className="wu-row wu-head">
+              <input type="checkbox" aria-label="Select all mailboxes" checked={allShown}
+                onChange={() => setSelected(allShown ? [] : shown.map((m) => m.id))} />
+              <span>Name</span>
+              <span>Emails sent today</span>
+              <span>Health score</span>
+              <span>Warm-up</span>
+            </div>
+            {shown.map((m) => (
+              <div
+                key={m.id}
+                className={`wu-row wu-acc${open === m.id ? " is-open" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open warm-up of ${m.email}`}
+                onClick={() => { setOpen(m.id); setTab("analytics"); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setOpen(m.id); setTab("analytics"); } }}
+              >
+                <input type="checkbox" aria-label={`Select ${m.email}`} checked={picked.includes(m.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => setSelected((sel) => (sel.includes(m.id) ? sel.filter((x) => x !== m.id) : [...sel, m.id]))} />
+                <div className="mb-who">
+                  <span className="mb-avatar" aria-hidden="true">{(m.display_name || m.email)[0].toUpperCase()}</span>
+                  <div className="mb-who-text">
+                    <strong className="truncate">{m.email}</strong>
+                    <span className="truncate">{m.display_name || "—"} · Day {m.warmup_day}{m.ready ? " · Ready for campaigns" : ""}</span>
+                  </div>
+                </div>
+                <div><strong>{m.sent_today} of {m.target_today}</strong></div>
+                <div><span className={`wu-score wu-score--${m.health}`} title={HEALTH[m.health].hint}>{pct(m.inbox_rate_7d)}</span></div>
+                <div>
+                  <button
+                    type="button"
+                    className={`wu-flame wu-flame--${m.status}`}
+                    disabled={busy === m.id}
+                    title={m.status === "active" ? "Warm-up is on. Click to pause." : m.status === "paused" ? "Warm-up is paused. Click to enable." : "Can't connect. Click to fix the login."}
+                    aria-label={m.status === "active" ? `Pause warm-up for ${m.email}` : m.status === "paused" ? `Enable warm-up for ${m.email}` : `Fix the login of ${m.email}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (m.status === "error") return setPasswordFor(m);
+                      request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: m.status === "active" ? "paused" : "active" },
+                        m.status === "active" ? `${m.email} paused. Its planned emails were cancelled.` : `${m.email} is warming up again.`);
+                    }}
+                  >
+                    <Flame size={18} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
           {shown.length === 0 && <p className="field-hint" style={{ padding: "0.8rem" }}>No mailboxes with this status.</p>}
           </>
@@ -400,16 +350,29 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           saving={busy === "add"}
         />
       )}
-      {settingsFor && (
-        <SettingsDialog
-          key={settingsFor.id}
-          mailbox={settingsFor}
-          onClose={() => setSettingsFor(null)}
-          saving={busy === "settings"}
-          onSave={async (body) => {
-            const ok = await request("settings", `/mailboxes/${settingsFor.id}`, "PATCH", body, `Warm-up settings of ${settingsFor.email} saved.`);
-            if (ok) setSettingsFor(null);
-          }}
+      {openRow && (
+        <WarmupPanel
+          key={openRow.id}
+          mailbox={openRow}
+          tab={tab}
+          setTab={setTab}
+          busy={busy}
+          onClose={() => setOpen(null)}
+          onStatus={(status) => request(openRow.id, `/mailboxes/${openRow.id}`, "PATCH", { status },
+            status === "paused" ? `${openRow.email} paused. Its planned emails were cancelled.` : `${openRow.email} is warming up again.`)}
+          onFixLogin={() => setPasswordFor(openRow)}
+          onSave={(body) => request("settings", `/mailboxes/${openRow.id}`, "PATCH", body, `Warm-up settings of ${openRow.email} saved.`)}
+          onTest={() => request(`test-${openRow.id}`, `/mailboxes/${openRow.id}/test`, "POST", undefined, `${openRow.email} can log in to send and read.`)}
+          onRemove={() => confirm({
+            title: `Remove ${openRow.email}?`,
+            message: "Its warm-up stops and its history is deleted. The mailbox itself and its emails are not touched.",
+            confirmLabel: "Remove mailbox",
+            danger: true,
+            onConfirm: async () => {
+              await request(`del-${openRow.id}`, `/mailboxes/${openRow.id}`, "DELETE", undefined, `${openRow.email} removed.`);
+              setOpen(null);
+            },
+          })}
         />
       )}
       {passwordFor && (
@@ -424,26 +387,6 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** 14 small bars: inbox (green) and spam (red) of each day's emails, sent-but-not-yet-seen in grey */
-function Spark({ series }: { series: MailboxRow["series"] }) {
-  const max = Math.max(1, ...series.map((d) => d.sent));
-  const total = series.reduce((n, d) => n + d.sent, 0);
-  return (
-    <div className="mb-spark" role="img" aria-label={`${total} emails sent in the last 14 days`}>
-      {series.map((d) => {
-        const other = Math.max(0, d.sent - d.inbox - d.spam);
-        return (
-          <span key={d.date} className="mb-spark-day" title={`${d.date}: ${d.sent} sent, ${d.inbox} inbox, ${d.spam} spam`}>
-            <i className="is-spam" style={{ height: `${(d.spam / max) * 100}%` }} />
-            <i className="is-other" style={{ height: `${(other / max) * 100}%` }} />
-            <i className="is-inbox" style={{ height: `${(d.inbox / max) * 100}%` }} />
-          </span>
-        );
-      })}
     </div>
   );
 }
@@ -686,65 +629,207 @@ function PasswordDialog({
 }
 
 
-/** Instantly-style settings: how fast the daily number grows, its ceiling, and how many received emails get answered */
-function SettingsDialog({
-  mailbox, onClose, onSave, saving,
+const weekday = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+
+/** Side panel of one mailbox, like Instantly's: analytics for the past week, its settings, its latest emails */
+function WarmupPanel({
+  mailbox: m, tab, setTab, busy, onClose, onStatus, onFixLogin, onSave, onTest, onRemove,
 }: {
   mailbox: MailboxRow;
+  tab: "analytics" | "settings" | "emails";
+  setTab: (t: "analytics" | "settings" | "emails") => void;
+  busy: string | null;
   onClose: () => void;
-  onSave: (body: { warmup_increase: number; daily_limit: number; warmup_reply_rate: number; warmup_weekdays_only: boolean }) => void;
-  saving: boolean;
+  onStatus: (status: "active" | "paused") => void;
+  onFixLogin: () => void;
+  onSave: (body: object) => Promise<unknown>;
+  onTest: () => void;
+  onRemove: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [increase, setIncrease] = useState(String(mailbox.warmup_increase ?? 1));
-  const [limit, setLimit] = useState(String(mailbox.daily_limit));
-  const [reply, setReply] = useState(String(mailbox.warmup_reply_rate ?? 30));
-  const [weekdays, setWeekdays] = useState(mailbox.warmup_weekdays_only);
   useDialogFocus(ref, true);
-
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !saving && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, saving]);
+  }, [onClose]);
+
+  const started = new Date(`${m.warmup_started_on}T12:00:00`);
+  const days = m.warmup_day - 1; // the server counts warm-up days in its own timezone
+  const week = m.series.slice(-7);
+  const top = Math.max(1, ...week.map((d) => d.sent));
+  const landed = m.inbox_7d + m.spam_7d;
+  const tone = m.health === "healthy" ? "good" : m.health === "fair" ? "fair" : m.health === "poor" ? "poor" : "none";
+
+  return (
+    <div className="wu-drawer-backdrop" onClick={onClose}>
+      <aside ref={ref} className="wu-drawer" role="dialog" aria-modal="true" aria-labelledby="wu-drawer-title" onClick={(e) => e.stopPropagation()}>
+        <div className="wu-drawer-head">
+          <div className="wu-started">
+            <Smile size={20} className={`wu-face wu-face--${tone}`} />
+            <div>
+              <strong id="wu-drawer-title" className="truncate">{m.email}</strong>
+              <span>Started on {started.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} | {days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`}</span>
+            </div>
+          </div>
+          <div className="wu-onoff">
+            {m.status === "error" ? (
+              <button className="btn btn-secondary btn-sm" onClick={onFixLogin}><KeyRound size={14} /> Fix login</button>
+            ) : (
+              <>
+                <button className={`btn btn-sm ${m.status === "paused" ? "btn-danger-soft is-on" : "btn-secondary"}`} disabled={busy === m.id || m.status === "paused"} onClick={() => onStatus("paused")}>Disable</button>
+                <button className={`btn btn-sm ${m.status === "active" ? "btn-success is-on" : "btn-secondary"}`} disabled={busy === m.id || m.status === "active"} onClick={() => onStatus("active")}>Enable</button>
+              </>
+            )}
+            <button className="icon-btn" aria-label="Close" onClick={onClose}><X size={18} /></button>
+          </div>
+        </div>
+
+        <div className="segmented wu-tabs" role="tablist">
+          {(["analytics", "settings", "emails"] as const).map((t) => (
+            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+              {t === "analytics" ? "Warm-up analytics" : t === "settings" ? "Settings" : "Emails & domain"}
+            </button>
+          ))}
+        </div>
+
+        {tab === "analytics" && (
+          <div className="wu-drawer-body">
+            {m.status === "error" && m.last_error && <div className="alert alert-danger"><AlertCircle size={18} /><div>{m.last_error}</div></div>}
+            <div className={`wu-banner wu-banner--${tone}`}>
+              <Smile size={34} />
+              <span>
+                {landed ? <><strong>{pct(m.inbox_rate_7d)}</strong> of your warm-up emails landed in inbox</> : "No results yet: the first warm-up emails are on their way"}
+              </span>
+            </div>
+            <div className="wu-tiles">
+              <div className="wu-tile"><span className="wu-tile-icon wu-blue"><Send size={18} /></span><div><em>Warm-up emails sent</em><strong>{m.sent_7d}</strong></div></div>
+              <div className="wu-tile"><span className="wu-tile-icon wu-green"><Inbox size={18} /></span><div><em>Landed in inbox</em><strong>{m.inbox_7d}</strong></div></div>
+              <div className="wu-tile"><span className="wu-tile-icon wu-violet"><ShieldCheck size={18} /></span><div><em>Saved from spam</em><strong>{m.rescued_7d}</strong></div></div>
+              <div className="wu-tile"><span className="wu-tile-icon wu-red"><ArrowDownLeft size={18} /></span><div><em>Warm-up received</em><strong>{m.received_7d}</strong></div></div>
+            </div>
+            <p className="field-hint">Summary for the past week. Today: {m.sent_today} of {m.target_today} sent, {m.scheduled_today} still to go (sent between 9 AM and 6 PM).</p>
+            <div className="card wu-chart-card">
+              <h3>Warm-up emails sent</h3>
+              <div className="wu-chart" role="img" aria-label="Warm-up emails sent per day, last 7 days">
+                {week.map((d) => (
+                  <div key={d.date} className="wu-chart-col" title={`${d.date}: ${d.sent} sent, ${d.inbox} inbox, ${d.spam} spam`}>
+                    <span className="wu-chart-num">{d.sent || ""}</span>
+                    <div className="wu-chart-bar" style={{ height: `${(d.sent / top) * 100}%` }}>
+                      <i className="wu-chart-spam" style={{ height: d.sent ? `${(d.spam / d.sent) * 100}%` : 0 }} />
+                    </div>
+                    <span className="wu-chart-day">{weekday(d.date)}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="field-hint"><span className="wu-key wu-key--inbox" /> Inbox <span className="wu-key wu-key--spam" /> Spam</p>
+            </div>
+          </div>
+        )}
+
+        {tab === "settings" && <WarmupSettings mailbox={m} saving={busy === "settings"} onSave={onSave} />}
+
+        {tab === "emails" && (
+          <div className="wu-drawer-body">
+            <div className="wu-row-actions">
+              <button className="btn btn-secondary btn-sm" disabled={busy === `test-${m.id}`} onClick={onTest}>
+                <RefreshCw size={14} className={busy === `test-${m.id}` ? "spin" : ""} /> Check the login
+              </button>
+              <button className="btn btn-secondary btn-sm danger-text" onClick={onRemove}><Trash2 size={14} /> Remove mailbox</button>
+            </div>
+            <DomainCheck mailboxId={m.id} />
+            <h3 className="wu-sub-title">Latest warm-up emails</h3>
+            <Activity mailboxId={m.id} />
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} className={`wu-switch${on ? " on" : ""}`} onClick={() => onChange(!on)}>
+      <span />
+    </button>
+  );
+}
+
+/** Instantly's warm-up settings: basic (ramp, limit, reply rate) and advanced (human-like behaviour) */
+function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; saving: boolean; onSave: (body: object) => Promise<unknown> }) {
+  const [increase, setIncrease] = useState(String(m.warmup_increase ?? 1));
+  const [limit, setLimit] = useState(String(m.daily_limit));
+  const [reply, setReply] = useState(String(m.warmup_reply_rate ?? 30));
+  const [weekdays, setWeekdays] = useState(m.warmup_weekdays_only);
+  const [adv, setAdv] = useState<Advanced>(m.warmup_settings);
+  const set = <K extends keyof Advanced>(k: K, v: Advanced[K]) => setAdv((a) => ({ ...a, [k]: v }));
 
   const inc = Number(increase), lim = Number(limit), rep = Number(reply);
-  const valid = Number.isInteger(inc) && inc >= 1 && inc <= 10 && Number.isInteger(lim) && lim >= 2 && lim <= 50 && Number.isInteger(rep) && rep >= 0 && rep <= 100;
-  const days = valid ? Math.ceil((lim - 1) / inc) + 1 : 0;
+  const pctOk = (v: number) => Number.isInteger(v) && v >= 0 && v <= 100;
+  const valid = Number.isInteger(inc) && inc >= 1 && inc <= 10 && Number.isInteger(lim) && lim >= 2 && lim <= 50 && pctOk(rep)
+    && pctOk(adv.open_rate) && pctOk(adv.spam_protection) && pctOk(adv.important_rate);
+  const reach = valid ? Math.ceil((lim - 1) / inc) + 1 : 0;
+  const percent = (k: "open_rate" | "spam_protection" | "important_rate") => (
+    <input className="input wu-pct" type="number" min={0} max={100} value={adv[k]} onChange={(e) => set(k, Number(e.target.value))} aria-label={k} />
+  );
+
   return (
-    <div className="dialog-backdrop" onClick={() => !saving && onClose()}>
-      <div ref={ref} className="dialog" role="dialog" aria-modal="true" aria-labelledby="wu-settings-title" onClick={(e) => e.stopPropagation()}>
-        <h3 id="wu-settings-title">Warm-up settings for {mailbox.email}</h3>
-        <p>
-          {mailbox.warmup_increase ? "" : "Right now this mailbox uses the standard ramp (3, 6, 12, then 20 a day). "}
-          Saving these switches it to a gradual ramp: 1 email on day 1, then a few more each day.
-        </p>
-        <form onSubmit={(e) => { e.preventDefault(); if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays }); }}>
-          <label className="field">
-            <span className="field-label">Increase per day</span>
-            <input className="input" type="number" min={1} max={10} required value={increase} onChange={(e) => setIncrease(e.target.value)} />
-            <span className="field-hint">How many more emails it sends each day (1 to 10). Instantly suggests 1.</span>
-          </label>
-          <label className="field">
-            <span className="field-label">Daily warm-up limit</span>
-            <input className="input" type="number" min={2} max={50} required value={limit} onChange={(e) => setLimit(e.target.value)} />
-            <span className="field-hint">The most it sends in a day (2 to 50). {valid ? `It reaches this on day ${days}.` : ""}</span>
-          </label>
-          <label className="field">
-            <span className="field-label">Reply rate (%)</span>
-            <input className="input" type="number" min={0} max={100} required value={reply} onChange={(e) => setReply(e.target.value)} />
-            <span className="field-hint">Share of the warm-up emails it receives that it answers (0 to 100). Instantly suggests 30.</span>
-          </label>
-          <label className="chat-pick-row" style={{ margin: "0.4rem 0 0.8rem" }}>
-            <input type="checkbox" checked={weekdays} onChange={(e) => setWeekdays(e.target.checked)} />
-            <span><strong>Weekdays only</strong> <span className="mb-muted">(no warm-up emails on Saturday and Sunday)</span></span>
-          </label>
-          <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-            <button className="btn btn-primary" disabled={saving || !valid}>{saving ? "Saving…" : "Save settings"}</button>
-          </div>
-        </form>
+    <form className="wu-drawer-body" onSubmit={(e) => {
+      e.preventDefault();
+      if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: adv });
+    }}>
+      <h3 className="wu-sub-title">Warm-up settings</h3>
+      <div className="wu-set-grid">
+        <label className="field">
+          <span className="field-label">Increase per day</span>
+          <input className="input" type="number" min={1} max={10} value={increase} onChange={(e) => setIncrease(e.target.value)} />
+          <span className="field-hint">Suggested: 1</span>
+        </label>
+        <label className="field">
+          <span className="field-label">Daily warm-up limit</span>
+          <input className="input" type="number" min={2} max={50} value={limit} onChange={(e) => setLimit(e.target.value)} />
+          <span className="field-hint">Suggested: 10{valid && adv.slow_ramp ? `. Reached on day ${reach}` : ""}</span>
+        </label>
+        <label className="field">
+          <span className="field-label">Reply rate %</span>
+          <input className="input" type="number" min={0} max={100} value={reply} onChange={(e) => setReply(e.target.value)} />
+          <span className="field-hint">Suggested: 30</span>
+        </label>
       </div>
-    </div>
+      <div className="wu-set-row">
+        <div><strong>Slow ramp</strong><span>Start with 1 email and add the increase each day. Turn off only for mailboxes that are already warm.</span></div>
+        <Toggle on={adv.slow_ramp} onChange={(v) => set("slow_ramp", v)} label="Slow ramp" />
+      </div>
+      <div className="wu-set-row">
+        <div><strong>Weekdays only</strong><span>No warm-up emails on Saturday and Sunday. It still receives and answers on weekends.</span></div>
+        <Toggle on={weekdays} onChange={setWeekdays} label="Weekdays only" />
+      </div>
+
+      <h3 className="wu-sub-title">Advanced warm-up settings</h3>
+      <p className="field-hint" style={{ marginTop: "-0.3rem" }}>Make the warm-up behave more like a person.</p>
+      <div className="wu-set-row">
+        <div><strong>Read emulation</strong><span>Open each warm-up email in full before marking it read, like a mail app does.</span></div>
+        <Toggle on={adv.read_emulation} onChange={(v) => set("read_emulation", v)} label="Read emulation" />
+      </div>
+      <div className="wu-set-row">
+        <div><strong>Random number each day</strong><span>Send a random number of warm-up emails each day (60–100% of the day&apos;s amount).</span></div>
+        <Toggle on={adv.random_daily} onChange={(v) => set("random_daily", v)} label="Random number each day" />
+      </div>
+      <div className="wu-set-row">
+        <div><strong>Open rate</strong><span>% of the warm-up emails it receives that it opens.</span></div>
+        {percent("open_rate")}
+      </div>
+      <div className="wu-set-row">
+        <div><strong>Spam protection</strong><span>% of warm-up emails found in spam that it moves to the inbox.</span></div>
+        {percent("spam_protection")}
+      </div>
+      <div className="wu-set-row">
+        <div><strong>Mark important</strong><span>% of the warm-up emails it receives that it marks important (starred).</span></div>
+        {percent("important_rate")}
+      </div>
+      <div className="dialog-actions">
+        <button className="btn btn-primary" disabled={saving || !valid}>{saving ? "Saving…" : "Save settings"}</button>
+      </div>
+    </form>
   );
 }
