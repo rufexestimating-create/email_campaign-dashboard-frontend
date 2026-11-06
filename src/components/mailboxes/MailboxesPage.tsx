@@ -9,7 +9,6 @@ import { formatDateTime } from "@/lib/campaigns";
 import { callApi } from "@/lib/insights";
 import type { ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
 import { useDialogFocus } from "@/components/dashboard/useDialogFocus";
-import { ChatPanel } from "./ChatPanel";
 import { NewslettersPanel } from "./NewslettersPanel";
 
 type Health = "healthy" | "fair" | "poor" | "starting" | "paused" | "error";
@@ -299,7 +298,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
         )}
       </div>
 
-      <ChatPanel mailboxes={data.mailboxes} notify={notify} />
+      {/* Manual chat is hidden: warm-up is fully automatic, like Instantly. ChatPanel and /chat stay in the code. */}
       <NewslettersPanel mailboxes={data.mailboxes} notify={notify} confirm={confirm} />
 
       <div className="card">
