@@ -970,16 +970,35 @@ function WarmupPanel({
         {tab === "settings" && <WarmupSettings mailbox={m} saving={busy === "settings"} onSave={onSave} />}
 
         {tab === "emails" && (
-          <div className="wu-drawer-body">
-            <div className="wu-row-actions">
-              <button className="btn btn-secondary btn-sm" disabled={busy === `test-${m.id}`} onClick={onTest}>
-                <RefreshCw size={14} className={busy === `test-${m.id}` ? "spin" : ""} /> Check the login
-              </button>
-              <button className="btn btn-secondary btn-sm danger-text" onClick={onRemove}><Trash2 size={14} /> Remove mailbox</button>
+          <div className="wu-detail-grid">
+            <div className="wu-col">
+              <div className="card wu-how">
+                <h3>Is everything set up right?</h3>
+                <p className="field-hint">Run these checks if emails stop going out or start landing in spam.</p>
+                <div className="wu-check">
+                  <div><strong>Login</strong><span>Can we still send from and read this mailbox?</span></div>
+                  <button className="btn btn-secondary btn-sm" disabled={busy === `test-${m.id}`} onClick={onTest}>
+                    <RefreshCw size={14} className={busy === `test-${m.id}` ? "spin" : ""} /> Check the login
+                  </button>
+                </div>
+                <div className="wu-check wu-check--stack">
+                  <div><strong>Domain setup</strong><span>SPF, DKIM and DMARC tell Gmail and Outlook the email is really from you.</span></div>
+                  <DomainCheck mailboxId={m.id} />
+                </div>
+              </div>
+              <div className="card wu-how">
+                <h3>Remove this mailbox</h3>
+                <p className="field-hint">Stops its warm-up and deletes its warm-up history. The mailbox itself and its emails are not touched.</p>
+                <div><button className="btn btn-secondary btn-sm danger-text" onClick={onRemove}><Trash2 size={14} /> Remove mailbox</button></div>
+              </div>
             </div>
-            <DomainCheck mailboxId={m.id} />
-            <h3 className="wu-sub-title">Latest warm-up emails</h3>
-            <Activity mailboxId={m.id} />
+            <div className="wu-col">
+              <div className="card wu-latest">
+                <h3>Latest warm-up emails</h3>
+                <p className="field-hint">↗ sent by this mailbox · ↙ received by it · <strong>Inbox</strong> = it arrived safely</p>
+                <Activity mailboxId={m.id} />
+              </div>
+            </div>
           </div>
         )}
     </section>
@@ -1054,10 +1073,11 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
   );
 
   return (
-    <form className="wu-drawer-body" onSubmit={(e) => {
+    <form className="wu-settings-grid" onSubmit={(e) => {
       e.preventDefault();
       if (valid) onSave({ warmup_increase: inc, daily_limit: lim, warmup_reply_rate: rep, warmup_weekdays_only: weekdays, warmup_settings: toSave(adv) }, applyAll);
     }}>
+      <div className="wu-col card wu-set-card">
       <h3 className="wu-sub-title">How fast should it warm up?</h3>
       <div className="wu-speeds" role="radiogroup" aria-label="Warm-up speed">
         {SPEEDS.map((sp) => {
@@ -1124,8 +1144,9 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
         </div>
       )}
 
-      <details className="wu-more">
-        <summary>More settings (optional)</summary>
+      </div>
+      <div className="wu-col card wu-set-card">
+      <h3 className="wu-sub-title">More settings <span className="mb-muted">(optional, you can leave these as they are)</span></h3>
       <h3 className="wu-sub-title">Warm-up settings</h3>
       <div className="wu-set-grid">
         <label className="field">
@@ -1198,8 +1219,8 @@ function WarmupSettings({ mailbox: m, saving, onSave }: { mailbox: MailboxRow; s
         <div><strong>Mark important</strong><span>% of the warm-up emails it receives that it marks important (starred).</span></div>
         {percent("important_rate")}
       </div>
-      </details>
-      <div className="dialog-actions">
+      </div>
+      <div className="dialog-actions wu-save-bar">
         <button className="btn btn-primary" disabled={saving || !valid}>{saving ? "Saving…" : "Save settings"}</button>
       </div>
     </form>

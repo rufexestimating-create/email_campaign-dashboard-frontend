@@ -2399,7 +2399,6 @@ select.input {
 .wu-detail { display: flex; flex-direction: column; gap: 1rem; outline: none; }
 .wu-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; }
 .wu-detail .wu-drawer-head { padding: 1rem 1.2rem; }
-.wu-detail .wu-drawer-body { max-width: 860px; }
 .wu-onoff-switch { display: flex; align-items: center; gap: 0.7rem; font-weight: 600; cursor: pointer; }
 .wu-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 1000px) { .wu-detail-grid { grid-template-columns: 1fr; } }
@@ -2414,3 +2413,14 @@ select.input {
 .wu-pager { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.7rem; font-size: 0.82rem; color: var(--text-3); }
 .wu-pager > div { display: flex; align-items: center; gap: 0.5rem; }
 .wu-pager-num { min-width: 90px; text-align: center; }
+/* Settings and checks use the full width: two columns on wide screens */
+.wu-settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 1000px) { .wu-settings-grid { grid-template-columns: 1fr; } }
+.wu-set-card { display: flex; flex-direction: column; gap: 0.8rem; }
+.wu-set-card > .wu-sub-title:first-child { margin-top: 0; }
+.wu-set-card .wu-set-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.wu-save-bar { grid-column: 1 / -1; position: sticky; bottom: 0; z-index: 2; margin: 0; padding: 0.8rem 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-lg); justify-content: flex-end; }
+.wu-check { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.wu-check > div:first-child { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1 1 220px; }
+.wu-check > div:first-child span { font-size: 0.8rem; color: var(--text-3); }
+.wu-check--stack { flex-direction: column; align-items: stretch; }
