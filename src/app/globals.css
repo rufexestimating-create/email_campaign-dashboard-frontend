@@ -2256,10 +2256,6 @@ select.input {
 .file-note { display: flex; align-items: flex-start; gap: 0.35rem; font-size: 0.8rem; color: var(--success); margin-top: 0.4rem; }
 .file-note svg { flex: none; margin-top: 2px; }
 /* Warm-up table, Instantly style: on/off switch and a health score */
-.wu-switch { width: 42px; height: 24px; border-radius: 999px; border: 0; background: var(--border-strong, #cfc6b8); position: relative; cursor: pointer; transition: background 0.15s; padding: 0; display: block; }
-.wu-switch span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
-.wu-switch.on { background: var(--success); }
-.wu-switch.on span { transform: translateX(18px); }
 .wu-switch:disabled { opacity: 0.6; cursor: wait; }
 .wu-switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .wu-score { display: inline-block; font-weight: 700; font-size: 1.05rem; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--surface-2, #f2ede3); }
@@ -2382,3 +2378,20 @@ select.input {
 .wu-extra[open] > summary { margin-bottom: 0.8rem; }
 .wu-providers { flex-wrap: wrap; }
 .wu-gmail-steps { margin: 0.4rem 0 0 1.1rem; padding: 0; font-size: 0.85rem; }
+/* iOS-style switch: grey track off, green track on, white knob that slides */
+.wu-switch { position: relative; flex: none; display: inline-block; width: 44px; height: 26px; padding: 0; border: 0; border-radius: 999px; background: #e9e9ea; cursor: pointer; transition: background-color 0.25s ease; vertical-align: middle; }
+.wu-switch span { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06); transition: transform 0.25s cubic-bezier(0.3, 1.3, 0.6, 1); }
+.wu-switch.on { background: #34c759; }
+.wu-switch.on span { transform: translateX(18px); }
+.wu-switch--lg { width: 51px; height: 31px; }
+.wu-switch--lg span { width: 27px; height: 27px; }
+.wu-switch--lg.on span { transform: translateX(20px); }
+.wu-switch:active span { width: 31px; }
+.wu-switch--lg:active span { width: 35px; }
+.wu-switch.on:active span { transform: translateX(14px); }
+.wu-switch--lg.on:active span { transform: translateX(12px); }
+.wu-switch:disabled { opacity: 0.55; cursor: wait; }
+.wu-switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+:root[data-theme="dark"] .wu-switch { background: #39393d; }
+:root[data-theme="dark"] .wu-switch.on { background: #30d158; }
+.wu-switch-label { display: block; font-size: 0.72rem; color: var(--text-3); margin-top: 0.25rem; width: 51px; text-align: center; }

@@ -200,8 +200,8 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
   const status =
     n === 0 ? { tone: "info", title: "Let's start: add your company mailboxes", text: "Add two or more mailboxes (for example from Hostinger or Gmail). After that the warm-up runs on its own." }
     : n === 1 ? { tone: "info", title: "Add one more mailbox to start", text: "Warm-up works by your mailboxes emailing each other, so it needs at least two." }
-    : failing.length ? { tone: "danger", title: `${failing.length} mailbox${failing.length === 1 ? " can't" : "es can't"} log in`, text: "Its password probably changed. Click the red flame next to it and enter the new password." }
-    : !active.length ? { tone: "warning", title: "Warm-up is switched off", text: "Click the grey flame next to a mailbox to switch it on." }
+    : failing.length ? { tone: "danger", title: `${failing.length} mailbox${failing.length === 1 ? " can't" : "es can't"} log in`, text: "Its password probably changed. Click \"Fix login\" next to it and enter the new password." }
+    : !active.length ? { tone: "warning", title: "Warm-up is switched off", text: "Turn on the switch next to a mailbox." }
     : allReady ? { tone: "success", title: "Your mailboxes are ready for campaigns", text: "They have warmed up long enough and their emails reach the inbox. Keep the warm-up on while you send campaigns." }
     : { tone: "success", title: "Warm-up is running. You don't need to do anything.", text: `Your mailboxes email each other every day by themselves. They should be ready for campaigns in about ${daysLeft} day${daysLeft === 1 ? "" : "s"}.` };
 
@@ -274,7 +274,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
           <div>
             <h2 className="card-title"><Flame size={17} /> Your mailboxes</h2>
             <p className="card-sub">
-              Click a mailbox to see its progress and settings. The flame switches its warm-up on (green) or off (grey).
+              Click a mailbox to see its progress and settings. The switch turns its warm-up on (green) or off (grey).
             </p>
           </div>
           <button className="btn btn-primary" onClick={() => setAdding(true)} disabled={full} title={full ? `You can add up to ${data.max_mailboxes} mailboxes` : undefined}>
@@ -366,22 +366,30 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                 <div><strong>{m.initial_today}</strong> <span className="mb-muted">sent · goal {m.target_today}</span>{m.sent_today > m.initial_today && <span className="mb-sub">+ {m.sent_today - m.initial_today} repl{m.sent_today - m.initial_today === 1 ? "y" : "ies"}</span>}</div>
                 <div><span className={`wu-score wu-score--${m.health}`} title={HEALTH[m.health].hint}>{pct(m.inbox_rate_7d)}</span></div>
                 <div>
-                  <button
-                    type="button"
-                    className={`wu-flame wu-flame--${m.status}`}
-                    disabled={busy === m.id}
-                    title={m.status === "active" ? "Warm-up is on. Click to pause." : m.status === "paused" ? "Warm-up is paused. Click to enable." : "Can't connect. Click to fix the login."}
-                    aria-label={m.status === "active" ? `Pause warm-up for ${m.email}` : m.status === "paused" ? `Enable warm-up for ${m.email}` : `Fix the login of ${m.email}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (m.status === "error") return setPasswordFor(m);
-                      request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: m.status === "active" ? "paused" : "active" },
-                        m.status === "active" ? `${m.email} paused. Its planned emails were cancelled.` : `${m.email} is warming up again.`);
-                    }}
-                  >
-                    <Flame size={18} />
-                  </button>
-                  <span className="wu-flame-label">{m.status === "active" ? "On" : m.status === "paused" ? "Off" : "Fix"}</span>
+                  {m.status === "error" ? (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); setPasswordFor(m); }}>
+                      <KeyRound size={14} /> Fix login
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={m.status === "active"}
+                        aria-label={`Warm-up for ${m.email}`}
+                        className={`wu-switch wu-switch--lg${m.status === "active" ? " on" : ""}`}
+                        disabled={busy === m.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          request(m.id, `/mailboxes/${m.id}`, "PATCH", { status: m.status === "active" ? "paused" : "active" },
+                            m.status === "active" ? `${m.email} paused. Its planned emails were cancelled.` : `${m.email} is warming up again.`);
+                        }}
+                      >
+                        <span />
+                      </button>
+                      <span className="wu-switch-label">{busy === m.id ? "…" : m.status === "active" ? "On" : "Off"}</span>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
