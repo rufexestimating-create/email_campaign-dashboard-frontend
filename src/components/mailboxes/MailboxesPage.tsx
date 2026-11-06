@@ -316,7 +316,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
                     )}
                   </div>
                 </div>
-                <div><strong>{m.initial_today} of {m.target_today}</strong>{m.sent_today > m.initial_today && <span className="mb-sub">+ {m.sent_today - m.initial_today} repl{m.sent_today - m.initial_today === 1 ? "y" : "ies"}</span>}</div>
+                <div><strong>{m.initial_today}</strong> <span className="mb-muted">sent · goal {m.target_today}</span>{m.sent_today > m.initial_today && <span className="mb-sub">+ {m.sent_today - m.initial_today} repl{m.sent_today - m.initial_today === 1 ? "y" : "ies"}</span>}</div>
                 <div><span className={`wu-score wu-score--${m.health}`} title={HEALTH[m.health].hint}>{pct(m.inbox_rate_7d)}</span></div>
                 <div>
                   <button
@@ -770,7 +770,7 @@ function WarmupPanel({
               <div className="wu-tile"><span className="wu-tile-icon wu-red"><ArrowDownLeft size={18} /></span><div><em>Warm-up received</em><strong>{m.received_7d}</strong></div></div>
             </div>
             <p className="field-hint">
-              Summary for the past week. Today: {m.initial_today} of {m.target_today} new emails sent{m.sent_today > m.initial_today ? ` plus ${m.sent_today - m.initial_today} replies` : ""}, {m.scheduled_today} still to go.
+              Summary for the past week. Today: {m.initial_today} new emails sent (daily goal {m.target_today}, test emails come on top){m.sent_today > m.initial_today ? ` plus ${m.sent_today - m.initial_today} replies` : ""}, {m.scheduled_today} still to go.
               {m.last_activity_at ? ` Last activity ${formatDateTime(m.last_activity_at)}.` : ""}
             </p>
             {m.failed_7d > 0 && (
