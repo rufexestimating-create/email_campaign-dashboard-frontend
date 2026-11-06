@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, ArrowDownLeft, CheckCircle2, Send, Smile, X, ArrowUpRight, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
+  AlertCircle, ArrowDownLeft, ArrowLeft, CheckCircle2, Send, Smile, ArrowUpRight, Flame, Inbox, KeyRound, Mail, Plus, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -207,6 +207,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
 
   return (
     <div className="lab-stack">
+      {!openRow && (<>
       <section className={`card wu-hero wu-hero--${status.tone}`} aria-label="Warm-up status">
         <div className="wu-hero-main">
           <h2>{status.title}</h2>
@@ -429,6 +430,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
         </ul>
       </div>
       </details>
+      </>)}
 
       {/* Mounted only while open, so each opening starts with an empty form and nothing later (saving, the
           minute refresh) clears what was typed */}
@@ -795,8 +797,11 @@ function WarmupPanel({
   onTest: () => void;
   onRemove: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useDialogFocus(ref, true);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    ref.current?.focus();
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -812,9 +817,9 @@ function WarmupPanel({
   const tone = m.health === "healthy" ? "good" : m.health === "fair" ? "fair" : m.health === "poor" ? "poor" : "none";
 
   return (
-    <div className="wu-drawer-backdrop" onClick={onClose}>
-      <aside ref={ref} className="wu-drawer" role="dialog" aria-modal="true" aria-labelledby="wu-drawer-title" onClick={(e) => e.stopPropagation()}>
-        <div className="wu-drawer-head">
+    <section ref={ref} className="wu-detail" aria-labelledby="wu-drawer-title" tabIndex={-1}>
+        <button type="button" className="link-btn wu-back" onClick={onClose}><ArrowLeft size={16} /> All mailboxes</button>
+        <div className="card wu-drawer-head">
           <div className="wu-started">
             <Smile size={20} className={`wu-face wu-face--${tone}`} />
             <div>
@@ -830,12 +835,15 @@ function WarmupPanel({
             {m.status === "error" ? (
               <button className="btn btn-secondary btn-sm" onClick={onFixLogin}><KeyRound size={14} /> Fix login</button>
             ) : (
-              <>
-                <button className={`btn btn-sm ${m.status === "paused" ? "btn-danger-soft is-on" : "btn-secondary"}`} disabled={busy === m.id || m.status === "paused"} onClick={() => onStatus("paused")}>Disable</button>
-                <button className={`btn btn-sm ${m.status === "active" ? "btn-success is-on" : "btn-secondary"}`} disabled={busy === m.id || m.status === "active"} onClick={() => onStatus("active")}>Enable</button>
-              </>
+              <label className="wu-onoff-switch">
+                <span>{busy === m.id ? "Saving…" : m.status === "active" ? "Warm-up is on" : "Warm-up is off"}</span>
+                <button type="button" role="switch" aria-checked={m.status === "active"} aria-label={`Warm-up for ${m.email}`}
+                  className={`wu-switch wu-switch--lg${m.status === "active" ? " on" : ""}`} disabled={busy === m.id}
+                  onClick={() => onStatus(m.status === "active" ? "paused" : "active")}>
+                  <span />
+                </button>
+              </label>
             )}
-            <button className="icon-btn" aria-label="Close" onClick={onClose}><X size={18} /></button>
           </div>
         </div>
 
@@ -848,64 +856,92 @@ function WarmupPanel({
         </div>
 
         {tab === "analytics" && (
-          <div className="wu-drawer-body">
-            {m.status === "error" && m.last_error && <div className="alert alert-danger"><AlertCircle size={18} /><div>{m.last_error}</div></div>}
-            <div className="wu-test">
-              <div>
-                <strong>Try it now</strong>
-                <span>Send one warm-up email straight away, at any time of day, and see where it lands.</span>
+          <div className="wu-detail-grid">
+            <div className="wu-col">
+              {m.status === "error" && m.last_error && <div className="alert alert-danger"><AlertCircle size={18} /><div>{m.last_error}</div></div>}
+              <div className={`wu-banner wu-banner--${tone}`}>
+                <Smile size={34} />
+                <span>
+                  {landed ? <><strong>{pct(m.inbox_rate_7d)}</strong> of its warm-up emails landed in the inbox this week</> : "No results yet: the first warm-up emails are on their way"}
+                </span>
               </div>
-              <button className="btn btn-primary btn-sm" disabled={busy === "sendtest" || m.status !== "active"} onClick={onSendTest}
-                title={m.status !== "active" ? "Turn the warm-up on first" : undefined}>
-                <Send size={14} /> {busy === "sendtest" ? "Sending…" : "Send a test email now"}
-              </button>
-            </div>
-            <div className={`wu-banner wu-banner--${tone}`}>
-              <Smile size={34} />
-              <span>
-                {landed ? <><strong>{pct(m.inbox_rate_7d)}</strong> of your warm-up emails landed in inbox</> : "No results yet: the first warm-up emails are on their way"}
-              </span>
-            </div>
-            <div className="wu-tiles">
-              <div className="wu-tile"><span className="wu-tile-icon wu-blue"><Send size={18} /></span><div><em>Warm-up emails sent</em><strong>{m.sent_7d}</strong></div></div>
-              <div className="wu-tile"><span className="wu-tile-icon wu-green"><Inbox size={18} /></span><div><em>Landed in inbox</em><strong>{m.inbox_7d}</strong></div></div>
-              <div className="wu-tile"><span className="wu-tile-icon wu-violet"><ShieldCheck size={18} /></span><div><em>Saved from spam</em><strong>{m.rescued_7d}</strong></div></div>
-              <div className="wu-tile"><span className="wu-tile-icon wu-red"><ArrowDownLeft size={18} /></span><div><em>Warm-up received</em><strong>{m.received_7d}</strong></div></div>
-            </div>
-            <p className="field-hint">
-              Summary for the past week. Today: {m.initial_today} new emails sent (daily goal {m.target_today}, test emails come on top){m.sent_today > m.initial_today ? ` plus ${m.sent_today - m.initial_today} replies` : ""}, {m.scheduled_today} still to go.
-              {m.last_activity_at ? ` Last activity ${formatDateTime(m.last_activity_at)}.` : ""}
-            </p>
-            {m.failed_7d > 0 && (
-              <div className="alert alert-warning" role="status">
-                <AlertCircle size={18} />
-                <div>
-                  <strong>{m.failed_7d} email{m.failed_7d === 1 ? "" : "s"} failed to send in the last 7 days.</strong>
-                  {m.last_failure && <> Latest ({formatDateTime(m.last_failure.at)}): <code className="wu-err">{m.last_failure.error.replace(/^\[try \d+\]\s*/, "")}</code></>}
+
+              <div className="card wu-how">
+                <h3>How this mailbox is warming up</h3>
+                <div className="wu-ready">
+                  <span className="wu-progress wu-progress--wide" aria-hidden="true">
+                    <i style={{ width: `${m.ready ? 100 : Math.min(100, (m.warmup_day / READY_DAY) * 100)}%` }} className={m.ready ? "done" : ""} />
+                  </span>
+                  <strong>{m.ready ? "Ready for campaigns" : `Day ${m.warmup_day} of ${READY_DAY}`}</strong>
                 </div>
+                <ul>
+                  {m.status === "active" ? (
+                    <li><Send size={15} /> Today it sends <strong>{m.target_today} email{m.target_today === 1 ? "" : "s"}</strong> to your other mailboxes, at random times between {hour(m.warmup_settings.window_start)} and {hour(m.warmup_settings.window_end)}. So far: {m.initial_today}.</li>
+                  ) : (
+                    <li><Send size={15} /> Warm-up is off, so it isn&apos;t sending anything. Turn on the switch above to continue.</li>
+                  )}
+                  <li><Inbox size={15} /> Your other mailboxes open its emails and answer some of them. It does the same with the emails it receives (it replies to about {m.warmup_reply_rate ?? 50}%).</li>
+                  <li><ShieldCheck size={15} /> If one of its emails lands in spam, it is moved back to the inbox by itself.</li>
+                  <li><CheckCircle2 size={15} /> {m.ready ? "It has warmed up long enough: you can use it for campaigns. Keep the warm-up on." : `In about ${Math.max(1, READY_DAY - m.warmup_day + 1)} days it will be ready for your campaigns. You don't need to do anything.`}</li>
+                </ul>
               </div>
-            )}
-            <div className="card wu-chart-card">
-              <div className="wu-chart-head">
-                <h3>Warm-up emails sent</h3>
-                <div className="segmented" role="group" aria-label="Chart range">
-                  {([7, 30] as const).map((r) => (
-                    <button key={r} type="button" className={range === r ? "active" : ""} aria-pressed={range === r} onClick={() => setRange(r)}>{r} days</button>
+
+              <div className="wu-tiles">
+                <div className="wu-tile"><span className="wu-tile-icon wu-blue"><Send size={18} /></span><div><em>Sent this week</em><strong>{m.sent_7d}</strong></div></div>
+                <div className="wu-tile"><span className="wu-tile-icon wu-green"><Inbox size={18} /></span><div><em>Landed in inbox</em><strong>{m.inbox_7d}</strong></div></div>
+                <div className="wu-tile"><span className="wu-tile-icon wu-violet"><ShieldCheck size={18} /></span><div><em>Saved from spam</em><strong>{m.rescued_7d}</strong></div></div>
+                <div className="wu-tile"><span className="wu-tile-icon wu-red"><ArrowDownLeft size={18} /></span><div><em>Received this week</em><strong>{m.received_7d}</strong></div></div>
+              </div>
+              {m.failed_7d > 0 && (
+                <div className="alert alert-warning" role="status">
+                  <AlertCircle size={18} />
+                  <div>
+                    <strong>{m.failed_7d} email{m.failed_7d === 1 ? "" : "s"} failed to send in the last 7 days.</strong>
+                    {m.last_failure && <> Latest ({formatDateTime(m.last_failure.at)}): <code className="wu-err">{m.last_failure.error.replace(/^\[try \d+\]\s*/, "")}</code></>}
+                  </div>
+                </div>
+              )}
+
+              <div className="wu-test">
+                <div>
+                  <strong>Try it now</strong>
+                  <span>Send one warm-up email straight away, at any time of day. It shows under &quot;Latest emails&quot; in about 2 minutes.</span>
+                </div>
+                <button className="btn btn-primary btn-sm" disabled={busy === "sendtest" || m.status !== "active"} onClick={onSendTest}
+                  title={m.status !== "active" ? "Turn the warm-up on first" : undefined}>
+                  <Send size={14} /> {busy === "sendtest" ? "Sending…" : "Send a test email now"}
+                </button>
+              </div>
+            </div>
+
+            <div className="wu-col">
+              <div className="card wu-chart-card">
+                <div className="wu-chart-head">
+                  <h3>Warm-up emails sent</h3>
+                  <div className="segmented" role="group" aria-label="Chart range">
+                    {([7, 30] as const).map((r) => (
+                      <button key={r} type="button" className={range === r ? "active" : ""} aria-pressed={range === r} onClick={() => setRange(r)}>{r} days</button>
+                    ))}
+                  </div>
+                </div>
+                <div className={`wu-chart${range === 30 ? " wu-chart--30" : ""}`} role="img" aria-label={`Warm-up emails sent per day, last ${range} days`}>
+                  {week.map((d) => (
+                    <div key={d.date} className="wu-chart-col" title={`${d.date}: ${d.sent} sent, ${d.inbox} inbox, ${d.spam} spam`}>
+                      <span className="wu-chart-num">{d.sent || ""}</span>
+                      <div className="wu-chart-bar" style={{ height: `${(d.sent / top) * 100}%` }}>
+                        <i className="wu-chart-spam" style={{ height: d.sent ? `${(d.spam / d.sent) * 100}%` : 0 }} />
+                      </div>
+                      <span className="wu-chart-day">{range === 7 ? weekday(d.date) : Number(d.date.slice(8))}</span>
+                    </div>
                   ))}
                 </div>
+                <p className="field-hint"><span className="wu-key wu-key--inbox" /> Inbox <span className="wu-key wu-key--spam" /> Spam</p>
               </div>
-              <div className={`wu-chart${range === 30 ? " wu-chart--30" : ""}`} role="img" aria-label={`Warm-up emails sent per day, last ${range} days`}>
-                {week.map((d) => (
-                  <div key={d.date} className="wu-chart-col" title={`${d.date}: ${d.sent} sent, ${d.inbox} inbox, ${d.spam} spam`}>
-                    <span className="wu-chart-num">{d.sent || ""}</span>
-                    <div className="wu-chart-bar" style={{ height: `${(d.sent / top) * 100}%` }}>
-                      <i className="wu-chart-spam" style={{ height: d.sent ? `${(d.spam / d.sent) * 100}%` : 0 }} />
-                    </div>
-                    <span className="wu-chart-day">{range === 7 ? weekday(d.date) : Number(d.date.slice(8))}</span>
-                  </div>
-                ))}
+              <div className="card wu-latest">
+                <h3>Latest emails</h3>
+                <p className="field-hint">↗ sent by this mailbox · ↙ received by it · <strong>Inbox</strong> = it arrived safely</p>
+                <Activity mailboxId={m.id} />
               </div>
-              <p className="field-hint"><span className="wu-key wu-key--inbox" /> Inbox <span className="wu-key wu-key--spam" /> Spam</p>
             </div>
           </div>
         )}
@@ -925,8 +961,7 @@ function WarmupPanel({
             <Activity mailboxId={m.id} />
           </div>
         )}
-      </aside>
-    </div>
+    </section>
   );
 }
 

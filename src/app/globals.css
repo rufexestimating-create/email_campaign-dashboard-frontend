@@ -2395,3 +2395,19 @@ select.input {
 :root[data-theme="dark"] .wu-switch { background: #39393d; }
 :root[data-theme="dark"] .wu-switch.on { background: #30d158; }
 .wu-switch-label { display: block; font-size: 0.72rem; color: var(--text-3); margin-top: 0.25rem; width: 51px; text-align: center; }
+/* A mailbox opens as its own page */
+.wu-detail { display: flex; flex-direction: column; gap: 1rem; outline: none; }
+.wu-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; }
+.wu-detail .wu-drawer-head { padding: 1rem 1.2rem; }
+.wu-detail .wu-drawer-body { max-width: 860px; }
+.wu-onoff-switch { display: flex; align-items: center; gap: 0.7rem; font-weight: 600; cursor: pointer; }
+.wu-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 1000px) { .wu-detail-grid { grid-template-columns: 1fr; } }
+.wu-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.wu-how h3, .wu-latest h3 { font-size: 1rem; margin: 0 0 0.7rem; }
+.wu-how ul { list-style: none; margin: 0.8rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.wu-how li { display: flex; gap: 0.55rem; align-items: flex-start; color: var(--text-2); font-size: 0.9rem; line-height: 1.45; }
+.wu-how li svg { flex: none; margin-top: 3px; color: var(--primary); }
+.wu-ready { display: flex; align-items: center; gap: 0.8rem; }
+.wu-progress--wide { flex: 1; height: 10px; }
+.wu-latest .field-hint { margin: -0.3rem 0 0.6rem; }
