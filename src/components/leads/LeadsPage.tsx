@@ -27,7 +27,7 @@ import { LoadError } from "@/components/insights/LoadError";
 import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { ConfirmDialog, type ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
 import { WriteEmailDialog, type WriteEmailRequest } from "./WriteEmailDialog";
-import { ReplyReader, type FullReply } from "./ReplyReader";
+import { ReplyView } from "./ReplyReader";
 
 /** Stage you set as the conversation moves on. Ready to talk business, Customer and Lost stop automatic follow-ups. */
 const STAGES: { id: LifecycleStage; label: string; tone: string }[] = [
@@ -168,15 +168,16 @@ function RecentReplies({
   stageOf,
   onStage,
   onReply,
+  onOpen,
 }: {
   stageOf: (leadId: string) => LifecycleStage | undefined;
   onStage: (leadId: string, stage: LifecycleStage) => void;
   onReply: (r: Pick<InboxReply, "id" | "recipient" | "lead_id" | "lead_name" | "subject">) => void;
+  onOpen: (id: string, replyTo: string | null) => void;
 }) {
   const [data, setData] = useState<RepliesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [all, setAll] = useState(false);
-  const [opening, setOpening] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await callApi<RepliesResponse>("/replies");
@@ -191,8 +192,7 @@ function RecentReplies({
       clearInterval(every);
     };
   }, [load]);
-  const setUnread = useCallback((id: string, unread: boolean) =>
-    setData((d) => (d ? { ...d, replies: d.replies.map((x) => (x.id === id ? { ...x, unread } : x)) } : d)), []);
+
 
   if (error) return <LoadError message={error} onRetry={load} />;
   if (!data) return null;
@@ -226,7 +226,7 @@ function RecentReplies({
               <li key={r.id} className={`reply-item${r.unread ? " is-unread" : ""}`}>
                 <span className={`sent-avatar av-${avatarTone(r.recipient)}`} aria-hidden="true">{who[0].toUpperCase()}</span>
                 <div className="reply-main">
-                  <button type="button" className="reply-open" onClick={() => setOpening(r.id)} aria-label={`Open the reply from ${who}${r.unread ? " (unread)" : ""}`}>
+                  <button type="button" className="reply-open" onClick={() => onOpen(r.id, data.reply_to)} aria-label={`Open the reply from ${who}${r.unread ? " (unread)" : ""}`}>
                     <span className="reply-head">
                       {r.unread && <span className="reply-dot" aria-hidden="true" />}
                       <strong>{who}</strong>
@@ -258,19 +258,6 @@ function RecentReplies({
           {all ? "Show fewer" : `Show all ${data.replies.length} replies`}
         </button>
       )}
-      {opening && (
-        <ReplyReader
-          key={opening}
-          replyId={opening}
-          onClose={() => setOpening(null)}
-          onRead={(id) => setUnread(id, false)}
-          onUnread={(id) => setUnread(id, true)}
-          onReply={(full: FullReply) => {
-            setOpening(null);
-            onReply({ id: full.id, recipient: full.recipient, lead_id: full.lead_id, lead_name: full.lead_name, subject: full.subject });
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -288,6 +275,8 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
   const [saving, setSaving] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [write, setWrite] = useState<WriteEmailRequest | null>(null);
+  // A reply opened from Recent replies: shown on its own page, like an email in Gmail
+  const [openReply, setOpenReply] = useState<{ id: string; replyTo: string | null } | null>(null);
 
   const load = useCallback(async () => {
     const res = await callApi<LeadScoresOverview>("/leads/scores");
@@ -401,6 +390,10 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
     <div className="lab-stack">
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
       <WriteEmailDialog request={write} onClose={() => setWrite(null)} notify={notify} />
+      {openReply ? (
+        <ReplyView key={openReply.id} replyId={openReply.id} replyTo={openReply.replyTo} notify={notify} timeAgo={timeAgo}
+          onBack={() => setOpenReply(null)} />
+      ) : (<>
       {SHOW_LEAD_SCORES && data.alerts.length > 0 && (
         <div className="alert alert-success" role="status">
           <Flame size={18} />
@@ -451,6 +444,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
           if (lead) changeStage(lead, next);
         }}
         onReply={(r) => setWrite(answer(r))}
+        onOpen={(id, replyTo) => setOpenReply({ id, replyTo })}
       />
 
       <div className="card card-flush" id="leads-list">
@@ -596,6 +590,7 @@ export function LeadsPage({ notify, onOpenModels }: { notify: (msg: string, isEr
         </p>
         {onOpenModels && <button className="link-btn" onClick={onOpenModels}>How scoring works <ArrowRight size={14} style={{ verticalAlign: "-2px" }} /></button>}
       </div>}
+      </>)}
     </div>
   );
 }

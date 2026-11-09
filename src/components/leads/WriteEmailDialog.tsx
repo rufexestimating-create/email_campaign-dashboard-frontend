@@ -31,14 +31,33 @@ export function WriteEmailDialog({
   return <WriteEmailForm key={`${request.leadId}:${request.replyId ?? ""}:${request.title}`} request={request} onClose={onClose} notify={notify} />;
 }
 
-function WriteEmailForm({
+/** The same form, written right under an opened email instead of in a window (like replying in Gmail) */
+export function WriteEmailInline({
   request,
   onClose,
+  onSent,
   notify,
 }: {
   request: WriteEmailRequest;
   onClose: () => void;
+  onSent?: () => void;
   notify: (msg: string, isError?: boolean) => void;
+}) {
+  return <WriteEmailForm inline request={request} onClose={onClose} onSent={onSent} notify={notify} />;
+}
+
+function WriteEmailForm({
+  request,
+  onClose,
+  onSent,
+  notify,
+  inline = false,
+}: {
+  request: WriteEmailRequest;
+  onClose: () => void;
+  onSent?: () => void;
+  notify: (msg: string, isError?: boolean) => void;
+  inline?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // Filled once when the form opens. The dashboard refreshes every few seconds and hands down a new onClose each
@@ -50,7 +69,7 @@ function WriteEmailForm({
   const sendingRef = useRef(false);
   // Where the mouse went down: selecting text and letting go outside the form must not close it
   const downOnBackdrop = useRef(false);
-  useDialogFocus(ref, true);
+  useDialogFocus(ref, !inline);
 
   useEffect(() => {
     closeRef.current = onClose;
@@ -58,10 +77,11 @@ function WriteEmailForm({
   });
 
   useEffect(() => {
+    if (inline) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !sendingRef.current && closeRef.current();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [inline]);
 
   const who = request.name || request.to;
 
@@ -75,8 +95,44 @@ function WriteEmailForm({
     setSending(false);
     if (res.error) return notify(res.error, true);
     notify(`Email sent to ${who}. It shows in Sent emails, and their reply will appear here.`);
+    onSent?.();
     onClose();
   };
+
+  const fields = (
+    <>
+      <div className="write-email-form">
+        <label className="field">
+          <span className="field-label">To</span>
+          <input className="input" value={request.name ? `${request.name} <${request.to}>` : request.to} readOnly />
+        </label>
+        <label className="field">
+          <span className="field-label">Subject</span>
+          <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={255} />
+        </label>
+        <label className="field">
+          <span className="field-label">Message</span>
+          <textarea className="input textarea" rows={inline ? 8 : 9} value={body} onChange={(e) => setBody(e.target.value)} autoFocus />
+          <span className="field-hint">{"{{first_name}}"} becomes their first name.</span>
+        </label>
+      </div>
+      <div className="dialog-actions">
+        <button className="btn btn-secondary" onClick={onClose} disabled={sending}>{inline ? "Discard" : "Cancel"}</button>
+        <button className="btn btn-primary" onClick={send} disabled={sending || !subject.trim() || !body.trim()}>
+          <Send size={15} aria-hidden="true" /> {sending ? "Sending…" : "Send email"}
+        </button>
+      </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <section ref={ref} className="card composer" aria-label={`Reply to ${who}`}>
+        <h3 className="composer-title">{request.title}</h3>
+        {fields}
+      </section>
+    );
+  }
 
   return (
     <div
@@ -91,27 +147,7 @@ function WriteEmailForm({
       <div ref={ref} className="dialog write-email" role="dialog" aria-modal="true" aria-labelledby="write-email-title" onClick={(e) => e.stopPropagation()}>
         <h3 id="write-email-title">{request.title}</h3>
         <p>Goes out now from your company address. {request.replyId ? "It joins your conversation with them." : ""}</p>
-        <div className="write-email-form">
-          <label className="field">
-            <span className="field-label">To</span>
-            <input className="input" value={request.name ? `${request.name} <${request.to}>` : request.to} readOnly />
-          </label>
-          <label className="field">
-            <span className="field-label">Subject</span>
-            <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={255} />
-          </label>
-          <label className="field">
-            <span className="field-label">Message</span>
-            <textarea className="input textarea" rows={9} value={body} onChange={(e) => setBody(e.target.value)} autoFocus />
-            <span className="field-hint">{"{{first_name}}"} becomes their first name.</span>
-          </label>
-        </div>
-        <div className="dialog-actions">
-          <button className="btn btn-secondary" onClick={onClose} disabled={sending}>Cancel</button>
-          <button className="btn btn-primary" onClick={send} disabled={sending || !subject.trim() || !body.trim()}>
-            <Send size={15} aria-hidden="true" /> {sending ? "Sending…" : "Send email"}
-          </button>
-        </div>
+        {fields}
       </div>
     </div>
   );
