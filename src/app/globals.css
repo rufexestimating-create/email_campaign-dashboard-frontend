@@ -2439,3 +2439,22 @@ select.input {
 .nl-progress .wu-progress { flex: 0 0 180px; }
 .nl-confirm { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.55rem; border-radius: 8px; background: var(--primary-soft); }
 .nl-confirm > span { font-size: 0.8rem; font-weight: 600; }
+/* Newsletters: live list of what's arriving */
+.nl-live { border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; background: var(--surface); margin-bottom: 1rem; }
+.nl-live-head { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.nl-live-head h3 { font-size: 1rem; margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+.nl-live-head .btn { margin-left: auto; }
+.nl-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 0 rgba(19, 112, 54, 0.5); animation: nlPulse 1.8s infinite; }
+@keyframes nlPulse { 0% { box-shadow: 0 0 0 0 rgba(19, 112, 54, 0.45); } 70% { box-shadow: 0 0 0 8px rgba(19, 112, 54, 0); } 100% { box-shadow: 0 0 0 0 rgba(19, 112, 54, 0); } }
+@media (prefers-reduced-motion: reduce) { .nl-live-dot { animation: none; } }
+.nl-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.nl-feed li + li { border-top: 1px solid var(--border); }
+.nl-feed-row { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 0.8rem; align-items: center; padding: 0.6rem 0.4rem; cursor: pointer; border-radius: 8px; }
+.nl-feed-row:hover { background: var(--primary-soft); }
+.nl-feed-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.nl-feed-name { font-weight: 650; font-size: 0.88rem; }
+.nl-feed-subject { font-size: 0.9rem; color: var(--text-2); }
+.nl-feed-meta { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--text-3); white-space: nowrap; }
+@media (max-width: 700px) { .nl-feed-row { grid-template-columns: 1fr; gap: 0.2rem; } }
+.nl-empty { margin: 0.2rem 0; }
+.nl-add > summary { cursor: pointer; font-weight: 600; color: var(--primary); margin-bottom: 0.6rem; }

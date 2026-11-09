@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, Mail, Newspaper, Plus, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, RefreshCw, Mail, Newspaper, Plus, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "@/components/dashboard/useDialogFocus";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -24,6 +24,7 @@ interface Subscription {
   rescued_count: number;
 }
 interface Data { catalog: CatalogItem[]; subscriptions: Subscription[] }
+interface FeedItem { sub_id: string; newsletter: string; mailbox_id: string; mailbox: string; uid: string; from: string; subject: string; date: string | null; seen: boolean }
 
 /** Newsletters each mailbox should get (once) */
 const RECOMMENDED = 3;
@@ -42,7 +43,10 @@ export function NewslettersPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [custom, setCustom] = useState({ name: "", sender_domains: "", signup_url: "" });
   const [showCustom, setShowCustom] = useState(false);
-  const [reading, setReading] = useState<Subscription | null>(null);
+  const [reading, setReading] = useState<{ sub: Subscription; uid?: string } | null>(null);
+  const [feed, setFeed] = useState<FeedItem[] | null>(null);
+  const [feedAt, setFeedAt] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   // Newsletters whose page was opened from here, waiting for "Yes, done" (per mailbox)
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const current = mailboxes.some((m) => m.id === me) ? me : mailboxes[0]?.id ?? "";
@@ -57,6 +61,24 @@ export function NewslettersPanel({
     if (res.data) setData(res.data);
     else if (res.error) notifyRef.current(res.error, true);
   }, []);
+
+  // The live list: newsletter emails in the mailboxes' inboxes, read again every minute
+  const loadFeed = useCallback(async (fresh = false) => {
+    const res = await callApi<FeedItem[]>(`/mailboxes/newsletters/feed${fresh ? "?fresh=true" : ""}`);
+    if (res.data) {
+      setFeed(res.data);
+      setFeedAt(new Date().toISOString());
+    }
+  }, []);
+
+  useEffect(() => {
+    const first = setTimeout(() => loadFeed(), 0);
+    const timer = setInterval(() => loadFeed(), 60_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [loadFeed]);
 
   useEffect(() => {
     const first = setTimeout(load, 0);
@@ -125,7 +147,7 @@ export function NewslettersPanel({
         {s.last_received_at ? ` · last ${formatDateTime(s.last_received_at)}` : ""}
       </span>
       {s.received_count > 0 && (
-        <button className="link-btn nl-view" onClick={() => setReading(s)}><Mail size={13} /> View emails</button>
+        <button className="link-btn nl-view" onClick={() => setReading({ sub: s })}><Mail size={13} /> View emails</button>
       )}
     </div>
   );
@@ -173,6 +195,55 @@ export function NewslettersPanel({
         </span>
       </div>
 
+      <div className="nl-live">
+        <div className="nl-live-head">
+          <h3><span className="nl-live-dot" aria-hidden="true" /> Arriving in {box.email.split("@")[0]}&apos;s inbox</h3>
+          <span className="mb-sub">
+            {feedAt ? `Checked ${formatDateTime(feedAt)}` : "Checking…"} · updates every minute
+          </span>
+          <button className="btn btn-secondary btn-sm" disabled={refreshing} onClick={async () => {
+            setRefreshing(true);
+            await loadFeed(true);
+            setRefreshing(false);
+          }}>
+            <RefreshCw size={14} className={refreshing ? "spin" : ""} /> Check now
+          </button>
+        </div>
+        {!feed ? <div className="loader" /> : (() => {
+          const mine = feed.filter((f) => f.mailbox_id === current);
+          if (!mine.length) {
+            return (
+              <p className="field-hint nl-empty">
+                {subs.length
+                  ? "No newsletter emails yet. The first ones usually arrive within a day of subscribing."
+                  : "No newsletters yet. Add a few below: their emails will show up here as they arrive."}
+              </p>
+            );
+          }
+          return (
+            <ul className="nl-feed">
+              {mine.slice(0, 8).map((f) => {
+                const s = (data?.subscriptions ?? []).find((x) => x.id === f.sub_id);
+                return (
+                  <li key={`${f.sub_id}-${f.uid}`}>
+                    <button type="button" className="nl-feed-row" disabled={!s} onClick={() => s && setReading({ sub: s, uid: f.uid })}>
+                      <span className="nl-feed-name">{f.newsletter}</span>
+                      <span className="nl-feed-subject truncate">{f.subject}</span>
+                      <span className="nl-feed-meta">
+                        <span className="pill no-dot tone-success">{f.seen ? "Opened" : "New"}</span>
+                        {f.date ? formatDateTime(f.date) : ""}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        })()}
+      </div>
+
+      <details className="nl-add" open={subs.length < RECOMMENDED}>
+        <summary>Add newsletters ({subs.length} of {RECOMMENDED} for this mailbox)</summary>
       <ol className="nl-steps">
         <li>Click <strong>Subscribe</strong> on a newsletter. We copy <strong>{box.email}</strong> and open its website.</li>
         <li>On that website, paste the address and subscribe.</li>
@@ -277,7 +348,16 @@ export function NewslettersPanel({
           )}
         </>
       )}
-      {reading && <NewsletterReader sub={reading} mailbox={box.email} onClose={() => setReading(null)} />}
+      </details>
+
+      {reading && (
+        <NewsletterReader
+          sub={reading.sub}
+          startUid={reading.uid}
+          mailbox={mailboxes.find((m) => m.id === reading.sub.mailbox_id)?.email ?? box.email}
+          onClose={() => setReading(null)}
+        />
+      )}
     </div>
   );
 }
@@ -286,7 +366,7 @@ interface EmailRow { uid: string; from: string; subject: string; date: string | 
 interface EmailFull { uid: string; from: string; subject: string; date: string | null; html: string }
 
 /** A newsletter's emails, read straight from the mailbox's inbox. The email runs in a sandboxed frame (no scripts). */
-function NewsletterReader({ sub, mailbox, onClose }: { sub: Subscription; mailbox: string; onClose: () => void }) {
+function NewsletterReader({ sub, mailbox, onClose, startUid }: { sub: Subscription; mailbox: string; onClose: () => void; startUid?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<EmailRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -307,10 +387,16 @@ function NewsletterReader({ sub, mailbox, onClose }: { sub: Subscription; mailbo
       setRows(res.data ?? []);
       setError(res.error);
     });
+    if (startUid) {
+      // Opened from the live list: show that email right away
+      callApi<EmailFull>(`/mailboxes/newsletters/${sub.id}/emails/${startUid}`).then((res) => {
+        if (live && res.data) setOpen(res.data);
+      });
+    }
     return () => {
       live = false;
     };
-  }, [sub.id]);
+  }, [sub.id, startUid]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
