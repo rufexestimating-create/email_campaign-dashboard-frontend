@@ -27,6 +27,7 @@ import { LoadError } from "@/components/insights/LoadError";
 import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { ConfirmDialog, type ConfirmRequest } from "@/components/dashboard/ConfirmDialog";
 import { WriteEmailDialog, type WriteEmailRequest } from "./WriteEmailDialog";
+import { ReplyReader, type FullReply } from "./ReplyReader";
 
 /** Stage you set as the conversation moves on. Ready to talk business, Customer and Lost stop automatic follow-ups. */
 const STAGES: { id: LifecycleStage; label: string; tone: string }[] = [
@@ -136,6 +137,7 @@ interface InboxReply {
   snippet: string | null;
   received_at: string;
   campaign_name: string | null;
+  unread: boolean;
 }
 interface RepliesResponse {
   tracking_on: boolean;
@@ -153,7 +155,7 @@ function followUp(lead: { id: string; email: string; name: string | null }): Wri
   };
 }
 /** An answer to what they wrote, in the same conversation */
-function answer(r: InboxReply): WriteEmailRequest {
+function answer(r: Pick<InboxReply, "id" | "recipient" | "lead_id" | "lead_name" | "subject">): WriteEmailRequest {
   const subject = r.subject?.trim() || "your message";
   return {
     leadId: r.lead_id!, to: r.recipient, name: r.lead_name, title: `Reply to ${r.lead_name || r.recipient}`, replyId: r.id,
@@ -169,11 +171,12 @@ function RecentReplies({
 }: {
   stageOf: (leadId: string) => LifecycleStage | undefined;
   onStage: (leadId: string, stage: LifecycleStage) => void;
-  onReply: (r: InboxReply) => void;
+  onReply: (r: Pick<InboxReply, "id" | "recipient" | "lead_id" | "lead_name" | "subject">) => void;
 }) {
   const [data, setData] = useState<RepliesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [all, setAll] = useState(false);
+  const [opening, setOpening] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await callApi<RepliesResponse>("/replies");
@@ -182,18 +185,28 @@ function RecentReplies({
   }, []);
   useEffect(() => {
     const timer = setTimeout(load, 0);
-    return () => clearTimeout(timer);
+    const every = setInterval(load, 60_000);  // new replies show up like new mail
+    return () => {
+      clearTimeout(timer);
+      clearInterval(every);
+    };
   }, [load]);
+  const setUnread = useCallback((id: string, unread: boolean) =>
+    setData((d) => (d ? { ...d, replies: d.replies.map((x) => (x.id === id ? { ...x, unread } : x)) } : d)), []);
 
   if (error) return <LoadError message={error} onRetry={load} />;
   if (!data) return null;
   const shown = all ? data.replies : data.replies.slice(0, REPLIES_SHOWN);
+  const unreadCount = data.replies.filter((r) => r.unread).length;
 
   return (
     <div className="card replies-card">
       <div className="card-head">
         <div>
-          <h2 className="card-title"><Reply size={17} aria-hidden="true" /> Recent replies</h2>
+          <h2 className="card-title">
+            <Reply size={17} aria-hidden="true" /> Recent replies
+            {unreadCount > 0 && <span className="pill tone-info reply-unread-count">{unreadCount} unread</span>}
+          </h2>
           <p className="card-sub">
             {data.tracking_on
               ? `What people wrote back to ${data.reply_to ?? "your emails"}. New replies appear within a minute and stop that person's follow-ups.`
@@ -210,15 +223,19 @@ function RecentReplies({
             const stage = r.lead_id ? stageOf(r.lead_id) : undefined;
             const who = r.lead_name || r.recipient;
             return (
-              <li key={r.id} className="reply-item">
+              <li key={r.id} className={`reply-item${r.unread ? " is-unread" : ""}`}>
                 <span className={`sent-avatar av-${avatarTone(r.recipient)}`} aria-hidden="true">{who[0].toUpperCase()}</span>
                 <div className="reply-main">
-                  <div className="reply-head">
-                    <strong>{who}</strong>
-                    <span className="text-2">{r.recipient}</span>
-                    <span className="reply-when" title={formatDateTime(r.received_at)}>{timeAgo(r.received_at) || formatDateTime(r.received_at)}</span>
-                  </div>
-                  <p className="reply-text">{r.snippet ? `“${r.snippet}”` : <em className="text-2">No text, maybe just an attachment.</em>}</p>
+                  <button type="button" className="reply-open" onClick={() => setOpening(r.id)} aria-label={`Open the reply from ${who}${r.unread ? " (unread)" : ""}`}>
+                    <span className="reply-head">
+                      {r.unread && <span className="reply-dot" aria-hidden="true" />}
+                      <strong>{who}</strong>
+                      <span className="text-2">{r.recipient}</span>
+                      <span className="reply-when" title={formatDateTime(r.received_at)}>{timeAgo(r.received_at) || formatDateTime(r.received_at)}</span>
+                    </span>
+                    {r.subject && <span className="reply-subject">{r.subject}</span>}
+                    <span className="reply-text">{r.snippet ? r.snippet : <em className="text-2">No text, maybe just an attachment.</em>}</span>
+                  </button>
                   <div className="reply-foot">
                     {r.campaign_name && <span className="text-2">Reply to “{r.campaign_name}”</span>}
                     {r.lead_id && (
@@ -240,6 +257,19 @@ function RecentReplies({
         <button className="link-btn" style={{ marginTop: "0.75rem" }} onClick={() => setAll(!all)}>
           {all ? "Show fewer" : `Show all ${data.replies.length} replies`}
         </button>
+      )}
+      {opening && (
+        <ReplyReader
+          key={opening}
+          replyId={opening}
+          onClose={() => setOpening(null)}
+          onRead={(id) => setUnread(id, false)}
+          onUnread={(id) => setUnread(id, true)}
+          onReply={(full: FullReply) => {
+            setOpening(null);
+            onReply({ id: full.id, recipient: full.recipient, lead_id: full.lead_id, lead_name: full.lead_name, subject: full.subject });
+          }}
+        />
       )}
     </div>
   );
