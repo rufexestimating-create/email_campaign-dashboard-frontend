@@ -223,7 +223,11 @@ function RecentReplies({
             const stage = r.lead_id ? stageOf(r.lead_id) : undefined;
             const who = r.lead_name || r.recipient;
             return (
-              <li key={r.id} className={`reply-item${r.unread ? " is-unread" : ""}`}>
+              <li key={r.id} className={`reply-item is-clickable${r.unread ? " is-unread" : ""}`} title="Click to open the message"
+                onClick={(e) => {
+                  // the whole card opens the message, except its own buttons and the stage menu
+                  if (!(e.target as HTMLElement).closest("button, select, a, input")) onOpen(r.id, data.reply_to);
+                }}>
                 <span className={`sent-avatar av-${avatarTone(r.recipient)}`} aria-hidden="true">{who[0].toUpperCase()}</span>
                 <div className="reply-main">
                   <button type="button" className="reply-open" onClick={() => onOpen(r.id, data.reply_to)} aria-label={`Open the reply from ${who}${r.unread ? " (unread)" : ""}`}>
@@ -235,7 +239,7 @@ function RecentReplies({
                     </span>
                     {r.subject && <span className="reply-subject">{r.subject}</span>}
                     <span className="reply-text">{r.snippet ? r.snippet : <em className="text-2">No text, maybe just an attachment.</em>}</span>
-                    {(r.snippet?.length ?? 0) > 150 && <span className="reply-more">Read more →</span>}
+                    <span className="reply-more">{(r.snippet?.length ?? 0) > 150 ? "Read full message" : "Open message"} <span aria-hidden="true">→</span></span>
                   </button>
                   <div className="reply-foot">
                     {r.campaign_name && <span className="text-2">Reply to “{r.campaign_name}”</span>}
