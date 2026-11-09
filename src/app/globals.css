@@ -2504,7 +2504,7 @@ select.input {
 .mail-to { font-size: 0.82rem; }
 .mail-date { font-size: 0.82rem; color: var(--text-3); white-space: nowrap; }
 .mail-avatar { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 1.05rem; background: var(--primary-soft); color: var(--primary); flex: none; }
-.mail-body { padding: 1.3rem 0 0.4rem 0; max-width: 1000px; font-size: 1rem; line-height: 1.7; color: var(--text); }
+.mail-body { padding: 1.3rem 0 0.4rem 0; font-size: 1rem; line-height: 1.7; color: var(--text); }
 .mail-body p { margin: 0 0 1rem; white-space: pre-line; word-break: break-word; }
 .mail-body a { color: var(--primary); word-break: break-all; }
 .mail-actions { display: flex; align-items: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); margin-top: 0.6rem; }
@@ -2513,3 +2513,6 @@ select.input {
 .composer { padding: 1.3rem 1.6rem; }
 .composer-title { font-size: 1rem; margin: 0 0 0.8rem; }
 @media (max-width: 640px) { .mail-card, .composer { padding: 1.1rem 1rem; } .mail-from { flex-wrap: wrap; } .mail-date { width: 100%; } }
+.mail-trimmed-btn { border: 1px solid var(--border); background: var(--surface-2, var(--surface)); color: var(--text-2); border-radius: 6px; padding: 0 0.6rem; font-size: 0.9rem; line-height: 1.4; letter-spacing: 1px; cursor: pointer; margin-bottom: 0.8rem; }
+.mail-trimmed-btn:hover { border-color: var(--primary); color: var(--text); }
+.mail-trimmed { color: var(--text-2); border-left: 3px solid var(--border); padding-left: 1rem; }
