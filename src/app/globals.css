@@ -2458,3 +2458,15 @@ select.input {
 @media (max-width: 700px) { .nl-feed-row { grid-template-columns: 1fr; gap: 0.2rem; } }
 .nl-empty { margin: 0.2rem 0; }
 .nl-add > summary { cursor: pointer; font-weight: 600; color: var(--primary); margin-bottom: 0.6rem; }
+.nl-how { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.9rem 1rem; border-radius: 12px; background: var(--primary-soft); margin-bottom: 1rem; }
+.nl-how h3, .nl-found h3 { font-size: 0.95rem; margin: 0 0 0.3rem; }
+.nl-how p { margin: 0; color: var(--text-2); font-size: 0.88rem; max-width: 80ch; }
+.nl-found { margin-bottom: 1rem; }
+.nl-found ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.6rem; }
+.nl-found li { display: flex; flex-direction: column; gap: 0.35rem; position: relative; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.nl-found li > div:first-child { display: flex; flex-direction: column; padding-right: 2rem; }
+.nl-found li .icon-btn { position: absolute; top: 0.5rem; right: 0.5rem; }
+.nl-ideas { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.nl-idea { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; font-size: 0.85rem; }
+.nl-idea span { color: var(--text-3); font-size: 0.78rem; }
+.nl-idea:hover { border-color: var(--primary); }
