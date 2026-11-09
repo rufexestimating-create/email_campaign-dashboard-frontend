@@ -404,7 +404,7 @@ export function MailboxesPage({ notify, confirm }: { notify: (msg: string, isErr
 
       {/* Manual chat is hidden: warm-up is fully automatic, like Instantly. ChatPanel and /chat stay in the code. */}
       <details className="wu-extra">
-        <summary>Optional extra: let your mailboxes receive newsletters, like a real inbox</summary>
+        <summary>Newsletters: make each inbox look real (one-time setup, about 3 minutes)</summary>
         <NewslettersPanel mailboxes={data.mailboxes} notify={notify} confirm={confirm} />
       </details>
 

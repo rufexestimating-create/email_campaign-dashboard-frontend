@@ -2428,3 +2428,14 @@ select.input {
 .wu-note { background: var(--info-soft); color: var(--text); padding: 0.5rem 0.7rem; border-radius: 8px; margin: 0 0 0.6rem; }
 .wu-own::placeholder { color: var(--text-3); opacity: 0.6; font-style: italic; }
 .wu-check--stack > div:first-child { flex: none; }
+/* Newsletters, made simple */
+.nl-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.4rem 0 0.8rem; }
+.nl-tab { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; padding: 0.55rem 0.9rem; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; text-align: left; }
+.nl-tab span { font-size: 0.78rem; color: var(--text-3); }
+.nl-tab .nl-done { color: var(--success); font-weight: 600; }
+.nl-tab.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.nl-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.nl-progress { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.6rem; font-size: 0.88rem; color: var(--text-2); flex-wrap: wrap; }
+.nl-progress .wu-progress { flex: 0 0 180px; }
+.nl-confirm { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.55rem; border-radius: 8px; background: var(--primary-soft); }
+.nl-confirm > span { font-size: 0.8rem; font-weight: 600; }

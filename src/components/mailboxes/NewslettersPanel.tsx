@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, Mail, Newspaper, Plus, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, Mail, Newspaper, Plus, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "@/components/dashboard/useDialogFocus";
 import { NETWORK_ERROR, apiFetch, errorMessage } from "@/lib/auth";
 import { formatDateTime } from "@/lib/campaigns";
@@ -25,6 +25,9 @@ interface Subscription {
 }
 interface Data { catalog: CatalogItem[]; subscriptions: Subscription[] }
 
+/** Newsletters each mailbox should get (once) */
+const RECOMMENDED = 3;
+
 /** Newsletters: a person subscribes each mailbox (signup forms block robots); the inbox check then confirms the
  *  subscription, opens every issue and takes it out of spam, so the mailbox receives ordinary outside mail. */
 export function NewslettersPanel({
@@ -39,8 +42,9 @@ export function NewslettersPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [custom, setCustom] = useState({ name: "", sender_domains: "", signup_url: "" });
   const [showCustom, setShowCustom] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [reading, setReading] = useState<Subscription | null>(null);
+  // Newsletters whose page was opened from here, waiting for "Yes, done" (per mailbox)
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const current = mailboxes.some((m) => m.id === me) ? me : mailboxes[0]?.id ?? "";
   // The dashboard re-renders every 10 s with a new `notify`; a ref keeps load() (and its timer) stable
   const notifyRef = useRef(notify);
@@ -93,6 +97,24 @@ export function NewslettersPanel({
     call(`add-${name}`, `/mailboxes/${current}/newsletters`, "POST", { name, sender_domains: domains, signup_url: url },
       `${name} saved for ${box.email}. Its confirmation email is clicked and each issue is opened automatically.`);
 
+  const countFor = (id: string) => (data?.subscriptions ?? []).filter((x) => x.mailbox_id === id).length;
+  const key = (name: string) => `${current}:${name}`;
+
+  /** Step 1 in one click: the address goes to the clipboard and the newsletter's signup page opens */
+  const startSubscribe = async (c: CatalogItem) => {
+    let copiedOk = true;
+    try {
+      await navigator.clipboard.writeText(box.email);
+    } catch {
+      copiedOk = false;
+    }
+    window.open(c.url, "_blank", "noopener,noreferrer");
+    setOpened((o) => ({ ...o, [key(c.name)]: true }));
+    notify(copiedOk
+      ? `${box.email} is copied. Paste it on the ${c.name} page that just opened and subscribe, then come back and click "Yes, done".`
+      : `Type ${box.email} on the ${c.name} page that just opened and subscribe, then come back and click "Yes, done".`);
+  };
+
   const status = (s: Subscription) => (
     <div className="nl-status">
       <span className={`pill no-dot ${s.status === "confirmed" ? "tone-success" : "tone-warning"}`}>
@@ -122,31 +144,39 @@ export function NewslettersPanel({
         <div>
           <h2 className="card-title"><Newspaper size={17} /> Newsletters</h2>
           <p className="card-sub">
-            A real inbox also receives newsletters. Subscribe each mailbox to a few; from then on their emails are opened and taken out of spam by themselves.
+            A real person&apos;s inbox also gets newsletters from well-known websites. Give each mailbox {RECOMMENDED} or more, once.
+            After that everything is automatic: the confirmation link is clicked, every issue is opened and taken out of spam.
           </p>
         </div>
-        <select className="input nl-select" value={current} onChange={(e) => setMe(e.target.value)} aria-label="Mailbox">
-          {mailboxes.map((m) => <option key={m.id} value={m.id}>{m.display_name || m.email}</option>)}
-        </select>
+      </div>
+
+      <div className="nl-tabs" role="tablist" aria-label="Mailbox">
+        {mailboxes.map((m) => {
+          const n = countFor(m.id);
+          return (
+            <button key={m.id} type="button" role="tab" aria-selected={m.id === current} className={`nl-tab${m.id === current ? " active" : ""}`} onClick={() => setMe(m.id)}>
+              <strong>{m.display_name || m.email.split("@")[0]}</strong>
+              <span className={n >= RECOMMENDED ? "nl-done" : ""}>{n >= RECOMMENDED ? `✓ ${n} newsletters` : `${n} of ${RECOMMENDED}`}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="nl-progress">
+        <span className="wu-progress wu-progress--wide" aria-hidden="true">
+          <i style={{ width: `${Math.min(100, (subs.length / RECOMMENDED) * 100)}%` }} className={subs.length >= RECOMMENDED ? "done" : ""} />
+        </span>
+        <span>
+          {subs.length >= RECOMMENDED
+            ? <><strong>{box.email}</strong> has enough newsletters. Nothing else to do.</>
+            : <><strong>{box.email}</strong>: {subs.length} of {RECOMMENDED}. Pick {RECOMMENDED - subs.length} more below.</>}
+        </span>
       </div>
 
       <ol className="nl-steps">
-        <li>
-          Copy the address{" "}
-          <button className="btn btn-secondary btn-sm" onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(box.email);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            } catch {
-              notify(`Copy this address: ${box.email}`);
-            }
-          }}>
-            {copied ? <Check size={14} /> : <Copy size={14} />} {box.email}
-          </button>
-        </li>
-        <li>Open a newsletter&apos;s signup page and subscribe with it.</li>
-        <li>Press <strong>I&apos;ve subscribed</strong>. Its confirmation email is clicked for you within a few minutes.</li>
+        <li>Click <strong>Subscribe</strong> on a newsletter. We copy <strong>{box.email}</strong> and open its website.</li>
+        <li>On that website, paste the address and subscribe.</li>
+        <li>Come back here and click <strong>Yes, done</strong>.</li>
       </ol>
 
       {!data ? (
@@ -163,21 +193,37 @@ export function NewslettersPanel({
                     <span className="mb-sub">{c.topic} · from {c.domains[0]}</span>
                   </div>
                   {s && status(s)}
-                  <div className="nl-actions">
-                    <a className="btn btn-secondary btn-sm" href={c.url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink size={14} /> Signup page
-                    </a>
-                    {s ? (
+                  {s ? (
+                    <div className="nl-actions">
+                      <a className="btn btn-secondary btn-sm" href={c.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} /> Website
+                      </a>
                       <button className="icon-btn danger" aria-label={`Stop handling ${c.name}`} title="Stop" onClick={() => remove(s)}>
                         <Trash2 size={15} />
                       </button>
-                    ) : (
-                      <button className="btn btn-primary btn-sm" disabled={busy === `add-${c.name}`}
-                        onClick={() => subscribed(c.name, c.domains.join(","), c.url)}>
-                        <Check size={14} /> I&apos;ve subscribed
+                    </div>
+                  ) : opened[key(c.name)] ? (
+                    <div className="nl-confirm">
+                      <span>Subscribed on their website?</span>
+                      <div className="nl-actions">
+                        <button className="btn btn-primary btn-sm" disabled={busy === `add-${c.name}`}
+                          onClick={async () => {
+                            const ok = await subscribed(c.name, c.domains.join(","), c.url);
+                            if (ok) setOpened((o) => ({ ...o, [key(c.name)]: false }));
+                          }}>
+                          <Check size={14} /> Yes, done
+                        </button>
+                        <button className="link-btn" onClick={() => startSubscribe(c)}>Open again</button>
+                        <button className="link-btn" onClick={() => setOpened((o) => ({ ...o, [key(c.name)]: false }))}>Not now</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="nl-actions">
+                      <button className="btn btn-primary btn-sm" onClick={() => startSubscribe(c)}>
+                        <ExternalLink size={14} /> Subscribe
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
