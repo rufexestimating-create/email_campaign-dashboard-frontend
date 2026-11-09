@@ -235,6 +235,7 @@ function RecentReplies({
                     </span>
                     {r.subject && <span className="reply-subject">{r.subject}</span>}
                     <span className="reply-text">{r.snippet ? r.snippet : <em className="text-2">No text, maybe just an attachment.</em>}</span>
+                    {(r.snippet?.length ?? 0) > 150 && <span className="reply-more">Read more →</span>}
                   </button>
                   <div className="reply-foot">
                     {r.campaign_name && <span className="text-2">Reply to “{r.campaign_name}”</span>}

@@ -42,27 +42,6 @@ export function paragraphs(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Like Gmail's "Show trimmed content": when the message repeats itself further down (earlier emails of the thread,
- *  pasted under the signature), everything from the first repeat on is folded away. */
-export function splitTrimmed(paras: string[]): { main: string[]; trimmed: string[] } {
-  if (paras.length < 2) return { main: paras, trimmed: [] };
-  const head = paras[0].replace(/\s+/g, " ").trim().slice(0, 40);
-  if (head.length < 25) return { main: paras, trimmed: [] };
-  for (let j = 1; j < paras.length; j++) {
-    const flat = paras[j].replace(/\s+/g, " ");
-    const at = flat.indexOf(head);
-    if (at < 0) continue;
-    const before = flat.slice(0, at).trim();
-    // keep the signature lines that come before the repeat
-    const kept = before ? paras[j].slice(0, paras[j].indexOf(head.slice(0, 12))).trim() : "";
-    return {
-      main: [...paras.slice(0, j), ...(kept ? [kept] : [])],
-      trimmed: [flat.slice(at), ...paras.slice(j + 1)],
-    };
-  }
-  return { main: paras, trimmed: [] };
-}
-
 function Linked({ text }: { text: string }) {
   return (
     <>
@@ -96,7 +75,6 @@ export function ReplyView({
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [sent, setSent] = useState(false);
-  const [showTrimmed, setShowTrimmed] = useState(false);
   const backRef = useRef(onBack);
 
   useEffect(() => {
@@ -169,47 +147,23 @@ export function ReplyView({
               </span>
             </div>
             <div className="mail-body">
-              {reply.body ? (() => {
-                const { main, trimmed } = splitTrimmed(paragraphs(reply.body));
-                return (
-                  <>
-                    {main.map((p, i) => <p key={i}><Linked text={p} /></p>)}
-                    {trimmed.length > 0 && (
-                      <>
-                        <button type="button" className="mail-trimmed-btn" aria-expanded={showTrimmed}
-                          title={showTrimmed ? "Hide the earlier messages" : "Show the earlier messages"} onClick={() => setShowTrimmed(!showTrimmed)}>
-                          •••
-                        </button>
-                        {showTrimmed && <div className="mail-trimmed">{trimmed.map((p, i) => <p key={i}><Linked text={p} /></p>)}</div>}
-                      </>
-                    )}
-                  </>
-                );
-              })() : (
+              {reply.body ? paragraphs(reply.body).map((p, i) => <p key={i}><Linked text={p} /></p>) : (
                 <p className="text-2"><em>No text, maybe just an attachment.</em></p>
               )}
             </div>
-            {!writing && answer && (
+            {answer && (writing ? (
+              <WriteEmailInline key={reply.id} request={answer} notify={notify} onSent={() => setSent(true)} onClose={() => setWriting(false)} />
+            ) : (
               <div className="mail-actions">
-                <button className="btn btn-primary mail-reply-btn" onClick={() => { setWriting(true); setSent(false); }}>
+                <button className="btn btn-secondary mail-reply-btn" onClick={() => { setWriting(true); setSent(false); }}>
                   <Reply size={16} aria-hidden="true" /> Reply
                 </button>
                 {sent && <span className="mail-sent">✓ Your answer was sent</span>}
               </div>
-            )}
+            ))}
           </>
         )}
       </div>
-
-      {writing && answer && (
-        <WriteEmailInline
-          key={reply?.id}
-          request={answer}
-          notify={notify}
-          onSent={() => setSent(true)}
-          onClose={() => setWriting(false)}
-        />
-      )}
     </section>
   );
 }

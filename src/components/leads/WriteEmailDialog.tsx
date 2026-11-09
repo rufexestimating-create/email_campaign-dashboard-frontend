@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Reply, Send } from "lucide-react";
 import { callApi } from "@/lib/insights";
 import { useDialogFocus } from "@/components/dashboard/useDialogFocus";
 
@@ -126,10 +126,25 @@ function WriteEmailForm({
   );
 
   if (inline) {
+    // Like Gmail's reply box: who it goes to, the subject on one line, a big message area, Send at the bottom
     return (
-      <section ref={ref} className="card composer" aria-label={`Reply to ${who}`}>
-        <h3 className="composer-title">{request.title}</h3>
-        {fields}
+      <section ref={ref} className="reply-box" aria-label={`Reply to ${who}`}>
+        <div className="reply-box-to">
+          <Reply size={16} aria-hidden="true" />
+          <span>To <strong>{request.name || request.to}</strong>{request.name ? <span className="text-2"> &lt;{request.to}&gt;</span> : null}</span>
+        </div>
+        <label className="reply-box-subject">
+          <span>Subject</span>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={255} />
+        </label>
+        <textarea className="reply-box-body" value={body} onChange={(e) => setBody(e.target.value)} aria-label="Message" autoFocus rows={9} />
+        <div className="reply-box-actions">
+          <button className="btn btn-primary" onClick={send} disabled={sending || !subject.trim() || !body.trim()}>
+            <Send size={15} aria-hidden="true" /> {sending ? "Sending…" : "Send"}
+          </button>
+          <button className="btn btn-ghost" onClick={onClose} disabled={sending}>Discard</button>
+          <span className="reply-box-hint">{"{{first_name}}"} becomes their first name</span>
+        </div>
       </section>
     );
   }
