@@ -177,10 +177,11 @@ export function NewslettersPanel({
           </span>
           <button className="btn btn-secondary btn-sm" disabled={refreshing} onClick={async () => {
             setRefreshing(true);
-            await loadFeed(true);
+            await loadFeed(true);  // looks for new newsletters in the mailboxes first
+            await load();          // so "Newsletters found" shows them too
             setRefreshing(false);
           }}>
-            <RefreshCw size={14} className={refreshing ? "spin" : ""} /> Check now
+            <RefreshCw size={14} className={refreshing ? "spin" : ""} /> {refreshing ? "Checking the inboxes…" : "Check now"}
           </button>
         </div>
         {!feed ? <div className="loader" /> : (() => {
