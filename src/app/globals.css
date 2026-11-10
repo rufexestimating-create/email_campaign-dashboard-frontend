@@ -2533,3 +2533,4 @@ select.input {
 .reply-more span { transition: transform 0.15s; }
 .reply-item.is-clickable:focus-within { border-color: var(--primary); }
 @media (prefers-reduced-motion: reduce) { .reply-item.is-clickable, .reply-item.is-clickable:hover { transform: none; transition: none; } }
+.wu-detected { color: var(--success); margin: -0.3rem 0 0; }

@@ -649,6 +649,20 @@ interface MailboxBody {
   username?: string;
 }
 
+/** Mail servers of well-known providers, picked from the address's domain */
+const KNOWN_SERVERS: Record<string, { name: string; smtp_host: string; smtp_port: number; imap_host: string; imap_port: number; note?: string }> = {
+  "agentmail.to": { name: "AgentMail", smtp_host: "smtp.agentmail.to", smtp_port: 465, imap_host: "imap.agentmail.to", imap_port: 993, note: "The password is your AgentMail API key." },
+  "gmail.com": { name: "Gmail", smtp_host: "smtp.gmail.com", smtp_port: 465, imap_host: "imap.gmail.com", imap_port: 993 },
+  "googlemail.com": { name: "Gmail", smtp_host: "smtp.gmail.com", smtp_port: 465, imap_host: "imap.gmail.com", imap_port: 993 },
+  "yahoo.com": { name: "Yahoo", smtp_host: "smtp.mail.yahoo.com", smtp_port: 465, imap_host: "imap.mail.yahoo.com", imap_port: 993, note: "Use a Yahoo app password (Account Security → Generate app password)." },
+  "aol.com": { name: "AOL", smtp_host: "smtp.aol.com", smtp_port: 465, imap_host: "imap.aol.com", imap_port: 993, note: "Use an AOL app password." },
+  "gmx.com": { name: "GMX", smtp_host: "mail.gmx.com", smtp_port: 465, imap_host: "imap.gmx.com", imap_port: 993, note: "Turn on IMAP in GMX settings first." },
+  "icloud.com": { name: "iCloud", smtp_host: "smtp.mail.me.com", smtp_port: 587, imap_host: "imap.mail.me.com", imap_port: 993, note: "Use an app-specific password from your Apple ID." },
+  "me.com": { name: "iCloud", smtp_host: "smtp.mail.me.com", smtp_port: 587, imap_host: "imap.mail.me.com", imap_port: 993, note: "Use an app-specific password from your Apple ID." },
+};
+const domainOf = (email: string) => email.trim().toLowerCase().split("@")[1] ?? "";
+const baseOf = (host: string) => host.toLowerCase().split(".").slice(-2).join(".");
+
 function MailboxDialog({
   open, defaults, onClose, onSave, saving,
 }: {
@@ -681,6 +695,17 @@ function MailboxDialog({
   if (!open) return null;
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
+
+  // An address of a known provider fills in its servers by itself
+  const known = KNOWN_SERVERS[domainOf(form.email)];
+  const setEmail = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const email = e.target.value;
+    const k = KNOWN_SERVERS[domainOf(email)];
+    setForm((f) => ({ ...f, email, ...(k ? { smtp_host: k.smtp_host, smtp_port: k.smtp_port, imap_host: k.imap_host, imap_port: k.imap_port } : {}) }));
+    if (k) setProvider(k.name === "Gmail" ? "gmail" : "other");
+  };
+  // Servers that clearly belong to another provider than the address (e.g. an @agentmail.to address on Hostinger)
+  const mismatch = known && form.smtp_host && baseOf(form.smtp_host) !== baseOf(known.smtp_host);
 
   return (
     <div className="dialog-backdrop" onClick={() => !saving && onClose()}>
@@ -720,8 +745,22 @@ function MailboxDialog({
         >
           <label className="field">
             <span className="field-label">Email address</span>
-            <input className="input" type="email" required value={form.email} onChange={set("email")} placeholder="ali@arvistry.com" autoComplete="off" autoFocus />
+            <input className="input" type="email" required value={form.email} onChange={setEmail} placeholder="ali@arvistry.com" autoComplete="off" autoFocus />
           </label>
+          {known && !mismatch && (
+            <p className="field-hint wu-detected">✓ {known.name} servers filled in for you.{known.note ? ` ${known.note}` : ""}</p>
+          )}
+          {mismatch && (
+            <div className="alert alert-warning" style={{ margin: 0 }} role="alert">
+              <AlertCircle size={18} />
+              <div>
+                This is a {known!.name} address, but the servers below are {form.smtp_host}.{" "}
+                <button type="button" className="link-btn" onClick={() => setForm((f) => ({ ...f, smtp_host: known!.smtp_host, smtp_port: known!.smtp_port, imap_host: known!.imap_host, imap_port: known!.imap_port }))}>
+                  Use the {known!.name} servers
+                </button>
+              </div>
+            </div>
+          )}
           <label className="field">
             <span className="field-label">Password</span>
             <input className="input" type="password" required value={form.password} onChange={set("password")} autoComplete="new-password" />
